@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import Settings
 from bot.db.models import User, Watch
-from bot.services.parser import ParsedWatch, parse_watch
+from bot.services.chat import ChatStore, chat_turn
+from bot.services.parser import ParsedWatch
 
 logger = logging.getLogger(__name__)
 router = Router(name="watch")
@@ -39,48 +40,56 @@ async def handle_free_text(
     session: AsyncSession,
     claude: AsyncAnthropic,
     settings: Settings,
+    chat_store: ChatStore,
 ) -> None:
     if message.from_user is None or not message.text:
         return
 
-    await message.answer("🤔 Entendendo seu pedido…")
     try:
-        parsed = await parse_watch(claude, settings, message.text)
-    except Exception:
-        logger.exception("parse failed")
-        await message.answer("Tive um problema interpretando. Pode reformular?")
-        return
-
-    if parsed.kind == "unclear":
-        await message.answer(parsed.clarification_needed or "Pode dar mais detalhes?")
-        return
-
-    user = await session.scalar(select(User).where(User.telegram_id == message.from_user.id))
-    if user is None:
-        user = User(
-            telegram_id=message.from_user.id,
-            username=message.from_user.username,
-            first_name=message.from_user.first_name,
+        turn = await chat_turn(
+            claude, settings, chat_store, message.from_user.id, message.text
         )
-        session.add(user)
-        await session.flush()
+    except Exception:
+        logger.exception("chat_turn failed")
+        await message.answer("Tive um problema. Pode tentar de novo?")
+        return
 
-    watch = Watch(
-        user_id=user.id,
-        kind=parsed.kind,
-        params=_params_from_parsed(parsed),
-        max_price=parsed.max_price_brl,
-        currency=parsed.currency,
-        summary=parsed.summary,
-        status="active",
-    )
-    session.add(watch)
-    await session.commit()
+    if turn.watch is not None:
+        user = await session.scalar(
+            select(User).where(User.telegram_id == message.from_user.id)
+        )
+        if user is None:
+            user = User(
+                telegram_id=message.from_user.id,
+                username=message.from_user.username,
+                first_name=message.from_user.first_name,
+            )
+            session.add(user)
+            await session.flush()
 
-    teto = f"\nTeto: R$ {parsed.max_price_brl:.2f}" if parsed.max_price_brl else ""
-    await message.answer(
-        f"✅ Monitoramento #{watch.id} criado.\n"
-        f"{parsed.summary}{teto}\n\n"
-        f"Vou checar de tempos em tempos e te aviso quando o preço cair. "
-        f"Use /list pra ver, /pause {watch.id} pra pausar."
-    )
+        if turn.watch.kind == "unclear":
+            await message.answer("Faltou alguma info. Pode descrever de novo?")
+            return
+
+        watch = Watch(
+            user_id=user.id,
+            kind=turn.watch.kind,
+            params=_params_from_parsed(turn.watch),
+            max_price=turn.watch.max_price_brl,
+            currency=turn.watch.currency,
+            summary=turn.watch.summary,
+            status="active",
+        )
+        session.add(watch)
+        await session.commit()
+
+        teto = f"\nTeto: R$ {turn.watch.max_price_brl:.2f}" if turn.watch.max_price_brl else ""
+        await message.answer(
+            f"✅ Monitoramento #{watch.id} criado.\n"
+            f"{turn.watch.summary}{teto}\n\n"
+            f"Vou checar de tempos em tempos. /list pra ver, /pause {watch.id} pra pausar."
+        )
+        return
+
+    if turn.reply:
+        await message.answer(turn.reply)

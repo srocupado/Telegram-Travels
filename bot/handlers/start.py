@@ -19,11 +19,13 @@ WELCOME = (
 
 HELP = (
     "<b>Como usar</b>\n"
-    "Mande o pedido em português livre — eu interpreto e crio o monitoramento.\n\n"
+    "Mande o pedido em português livre — eu vou perguntando o que falta até montar o monitoramento. "
+    "A conversa fica salva por 30 minutos. Diga <i>cancela</i> pra desistir.\n\n"
     "<b>Comandos</b>\n"
     "/start - boas-vindas\n"
     "/help - esta ajuda\n"
     "/ping - testa a conexão com a IA\n"
+    "/roteiro &lt;destino e detalhes&gt; - gera roteiro dia a dia\n"
     "/search &lt;texto&gt; - busca preço agora, sem criar alerta\n"
     "/list - seus monitoramentos ativos\n"
     "/pause &lt;id&gt; - pausa um monitoramento\n"

@@ -7,6 +7,7 @@ from anthropic import AsyncAnthropic
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot.config import Settings
+from bot.services.chat import ChatStore
 from bot.services.serpapi_client import SerpAPIClient
 
 
@@ -17,11 +18,13 @@ class DepsMiddleware(BaseMiddleware):
         settings: Settings,
         claude: AsyncAnthropic,
         serpapi: SerpAPIClient,
+        chat_store: ChatStore,
     ) -> None:
         self._sessionmaker = sessionmaker
         self._settings = settings
         self._claude = claude
         self._serpapi = serpapi
+        self._chat_store = chat_store
 
     async def __call__(
         self,
@@ -34,4 +37,5 @@ class DepsMiddleware(BaseMiddleware):
             data["settings"] = self._settings
             data["claude"] = self._claude
             data["serpapi"] = self._serpapi
+            data["chat_store"] = self._chat_store
             return await handler(event, data)

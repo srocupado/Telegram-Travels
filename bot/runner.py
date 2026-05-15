@@ -12,6 +12,7 @@ from bot.db.base import Base
 from bot.db.session import make_engine, make_sessionmaker
 from bot.logging_setup import setup_logging
 from bot.middlewares.db import DepsMiddleware
+from bot.services.chat import ChatStore
 from bot.services.claude_client import make_claude
 from bot.services.scheduler import run_scheduler
 from bot.services.serpapi_client import SerpAPIClient
@@ -30,13 +31,16 @@ async def main() -> None:
     sessionmaker = make_sessionmaker(engine)
     claude = make_claude(settings)
     serpapi = SerpAPIClient(settings)
+    chat_store = ChatStore()
 
     bot = Bot(
         token=settings.bot_token.get_secret_value(),
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dp = Dispatcher()
-    dp.update.middleware(DepsMiddleware(sessionmaker, settings, claude, serpapi))
+    dp.update.middleware(
+        DepsMiddleware(sessionmaker, settings, claude, serpapi, chat_store)
+    )
     dp.include_router(handlers.router)
 
     scheduler_task = asyncio.create_task(
