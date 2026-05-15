@@ -1,0 +1,31 @@
+[project]
+name = "telegram-travels"
+version = "0.1.0"
+description = "Telegram bot para viagens"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram~=3.13",
+    "sqlalchemy[asyncio]~=2.0.36",
+    "asyncpg~=0.30",
+    "alembic~=1.14",
+    "pydantic-settings~=2.6",
+    "python-json-logger~=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff~=0.7",
+    "mypy~=1.13",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
