@@ -21,6 +21,7 @@ EDIT_INTERVAL = 1.5
 class StreamResult:
     error: str | None
     truncated: bool
+    text: str = ""
 
 
 def _split_index(text: str, limit: int) -> int:
@@ -62,6 +63,7 @@ async def stream_long_form_to_telegram(
         ) as stream:
             messages: list[Message] = [placeholder]
             current = ""
+            chunks: list[str] = []
             last_edit = 0.0
 
             async for delta in stream.text_stream:
@@ -69,7 +71,9 @@ async def stream_long_form_to_telegram(
 
                 while len(current) > TELEGRAM_LIMIT:
                     split = _split_index(current, TELEGRAM_LIMIT)
-                    await _safe_edit(messages[-1], current[:split].rstrip())
+                    finalized = current[:split].rstrip()
+                    await _safe_edit(messages[-1], finalized)
+                    chunks.append(finalized)
                     current = current[split:].lstrip()
                     new_msg = await placeholder.answer(current or "…")
                     messages.append(new_msg)
@@ -83,15 +87,20 @@ async def stream_long_form_to_telegram(
             final = await stream.get_final_message()
             if current.strip():
                 await _safe_edit(messages[-1], current)
+                chunks.append(current.strip())
 
             if final.stop_reason == "refusal":
                 await _safe_edit(
                     placeholder,
                     "🙅 A IA recusou esse pedido por questões de política. Reformule sem temas sensíveis.",
                 )
-                return StreamResult(error="refusal", truncated=False)
+                return StreamResult(error="refusal", truncated=False, text="")
 
-            return StreamResult(error=None, truncated=final.stop_reason == "max_tokens")
+            return StreamResult(
+                error=None,
+                truncated=final.stop_reason == "max_tokens",
+                text="\n\n".join(chunks).strip(),
+            )
 
     except anthropic.APITimeoutError:
         await _safe_edit(placeholder, "⏱️ A IA demorou demais pra responder. Tenta de novo.")

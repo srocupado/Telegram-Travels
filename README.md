@@ -68,7 +68,7 @@ O esquema do banco é criado automaticamente no primeiro boot. Uma micro-migraç
 | `BOT_TOKEN` | Token do BotFather | — |
 | `ANTHROPIC_API_KEY` | Claude API | — |
 | `SERPAPI_KEY` | SerpAPI | — |
-| `ACCESS_PASSWORD` | Senha pra liberar acesso a novos usuários | `jujuba` |
+| `ACCESS_PASSWORD` | Senha pra liberar acesso a novos usuários | — |
 | `DATABASE_PATH` | Caminho do SQLite no container | `/data/travels.db` |
 | `LOG_LEVEL` | `DEBUG`/`INFO`/`WARNING` | `INFO` |
 | `LOG_JSON` | Logs em JSON estruturado | `true` |

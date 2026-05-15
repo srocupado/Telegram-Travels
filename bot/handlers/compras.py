@@ -10,6 +10,7 @@ from anthropic import AsyncAnthropic
 
 from bot.config import Settings
 from bot.services.long_form import stream_long_form_to_telegram
+from bot.services.long_form_chat import LongFormStore
 
 logger = logging.getLogger(__name__)
 router = Router(name="compras")
@@ -39,7 +40,10 @@ async def cmd_compras(
     command: CommandObject,
     claude: AsyncAnthropic,
     settings: Settings,
+    long_form_store: LongFormStore,
 ) -> None:
+    if message.from_user is None:
+        return
     if not command.args:
         await message.answer(
             "Uso: /compras &lt;o que comprar&gt; em &lt;cidade/país&gt;\n"
@@ -58,4 +62,13 @@ async def cmd_compras(
         await message.answer(
             "⚠️ A resposta era grande demais e foi cortada. "
             "Tenta reduzir o escopo (uma cidade ou um tipo de produto por vez)."
+        )
+
+    if result.error is None and result.text:
+        long_form_store.save_initial(
+            message.from_user.id, "compras", command.args, result.text
+        )
+        await message.answer(
+            "💬 Quer perguntar algo mais (ex: qual mais barato, qual fica perto de X)? "
+            "Use <code>/seguir &lt;pergunta&gt;</code>."
         )

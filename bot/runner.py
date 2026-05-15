@@ -17,6 +17,7 @@ from bot.middlewares.auth import AuthMiddleware
 from bot.middlewares.db import DepsMiddleware
 from bot.services.chat import ChatStore
 from bot.services.claude_client import make_claude
+from bot.services.long_form_chat import LongFormStore
 from bot.services.scheduler import run_scheduler
 from bot.services.serpapi_client import SerpAPIClient
 
@@ -49,6 +50,7 @@ async def main() -> None:
     claude = make_claude(settings)
     serpapi = SerpAPIClient(settings)
     chat_store = ChatStore()
+    long_form_store = LongFormStore()
 
     bot = Bot(
         token=settings.bot_token.get_secret_value(),
@@ -59,7 +61,9 @@ async def main() -> None:
         AuthMiddleware(sessionmaker, settings.access_password.get_secret_value())
     )
     dp.update.middleware(
-        DepsMiddleware(sessionmaker, settings, claude, serpapi, chat_store)
+        DepsMiddleware(
+            sessionmaker, settings, claude, serpapi, chat_store, long_form_store
+        )
     )
     dp.include_router(handlers.router)
 

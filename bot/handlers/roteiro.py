@@ -10,6 +10,7 @@ from anthropic import AsyncAnthropic
 
 from bot.config import Settings
 from bot.services.long_form import stream_long_form_to_telegram
+from bot.services.long_form_chat import LongFormStore
 
 logger = logging.getLogger(__name__)
 router = Router(name="roteiro")
@@ -38,7 +39,10 @@ async def cmd_roteiro(
     command: CommandObject,
     claude: AsyncAnthropic,
     settings: Settings,
+    long_form_store: LongFormStore,
 ) -> None:
+    if message.from_user is None:
+        return
     if not command.args:
         await message.answer(
             "Uso: /roteiro &lt;destino e detalhes&gt;\n"
@@ -56,4 +60,12 @@ async def cmd_roteiro(
         await message.answer(
             "⚠️ O roteiro era grande demais e foi cortado no meio. "
             "Tenta pedir menos dias por vez (ex: divida em 2 partes de 10 dias)."
+        )
+
+    if result.error is None and result.text:
+        long_form_store.save_initial(
+            message.from_user.id, "roteiro", command.args, result.text
+        )
+        await message.answer(
+            "💬 Quer perguntar algo sobre esse roteiro? Use <code>/seguir &lt;pergunta&gt;</code>."
         )
