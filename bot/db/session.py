@@ -4,7 +4,7 @@ from bot.config import Settings
 
 
 def make_engine(settings: Settings) -> AsyncEngine:
-    return create_async_engine(settings.db_dsn, pool_pre_ping=True)
+    return create_async_engine(settings.db_dsn)
 
 
 def make_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

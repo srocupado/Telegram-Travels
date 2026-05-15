@@ -1,33 +1,41 @@
 # Telegram-Travels
 
-Bot do Telegram para viagens. Stack: Python 3.12 + aiogram 3 + Postgres 16, empacotado em Docker Compose. Modo long polling (sem porta exposta).
+Bot do Telegram para viagens. Stack: Python 3.12 + aiogram 3 + SQLite, empacotado em Docker. Modo long polling (sem porta exposta).
 
-## Deploy rápido (na VM Oracle Free Tier)
+Pensado pra rodar numa VM micro grátis (Google Cloud `e2-micro`, Oracle AMD `E2.1.Micro`, ou similar) — 1 GB RAM já basta.
+
+## Deploy rápido
 
 ```bash
 git clone git@github.com:srocupado/Telegram-Travels.git
 cd Telegram-Travels
-cp .env.example .env && nano .env
-docker compose build
-docker compose up -d db
-docker compose run --rm bot alembic upgrade head
-docker compose up -d bot
+cp .env.example .env && nano .env   # preencha BOT_TOKEN
+docker compose up -d --build
 docker compose logs -f bot
 ```
 
-Detalhes completos no plano em `/root/.claude/plans/` (passo a passo desde criar a VM até backup automático).
+Esquema do banco é criado automaticamente na primeira execução (`Base.metadata.create_all`).
 
 ## Stack
 - aiogram 3 (Telegram)
-- SQLAlchemy 2 async + asyncpg (Postgres)
-- Alembic (migrações)
+- SQLAlchemy 2 async + aiosqlite (SQLite)
 - pydantic-settings (config via `.env`)
 
-## Atualizar o bot
+## Atualizar
 
 ```bash
 git pull
-docker compose build bot
-docker compose run --rm bot alembic upgrade head   # só se mexeu em models
-docker compose up -d bot
+docker compose up -d --build
+```
+
+## Backup
+
+```bash
+bash scripts/backup.sh
+```
+
+Gera `~/backups/travels/travels-YYYYMMDDTHHMMSSZ.sql.gz`. Restaurar:
+
+```bash
+gunzip -c backup.sql.gz | docker compose exec -T bot sqlite3 /data/travels.db
 ```

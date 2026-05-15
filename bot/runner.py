@@ -6,6 +6,8 @@ from aiogram.enums import ParseMode
 
 from bot import handlers
 from bot.config import Settings
+from bot.db import models  # noqa: F401  registers tables on Base.metadata
+from bot.db.base import Base
 from bot.db.session import make_engine, make_sessionmaker
 from bot.logging_setup import setup_logging
 from bot.middlewares.db import DbSessionMiddleware
@@ -18,6 +20,9 @@ async def main() -> None:
     setup_logging(settings)
 
     engine = make_engine(settings)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     sessionmaker = make_sessionmaker(engine)
 
     bot = Bot(
