@@ -10,6 +10,7 @@ from anthropic import AsyncAnthropic
 
 from bot.config import Settings
 from bot.handlers.roteiro import _split_for_telegram
+from bot.services.long_form import generate_long_form
 
 logger = logging.getLogger(__name__)
 router = Router(name="compras")
@@ -48,24 +49,21 @@ async def cmd_compras(
         )
         return
 
-    await message.answer("🛍️ Pesquisando lugares… (pode levar uns 20s)")
+    await message.answer("🛍️ Pesquisando lugares… (pode levar uns 30s)")
 
-    try:
-        response = await claude.messages.create(
-            model=settings.sonnet_model,
-            max_tokens=3000,
-            system=COMPRAS_SYSTEM,
-            messages=[{"role": "user", "content": command.args}],
-        )
-    except Exception as e:
-        logger.exception("compras failed")
-        await message.answer(f"❌ Falhou: {type(e).__name__}: {e}")
+    result = await generate_long_form(
+        claude, settings, COMPRAS_SYSTEM, command.args, max_tokens=8000
+    )
+
+    if result.error:
+        await message.answer(result.error)
         return
 
-    text = next((b.text for b in response.content if b.type == "text"), "").strip()
-    if not text:
-        await message.answer("A IA voltou vazia. Tenta de novo com mais detalhes?")
-        return
-
-    for chunk in _split_for_telegram(text):
+    for chunk in _split_for_telegram(result.text):
         await message.answer(chunk)
+
+    if result.truncated:
+        await message.answer(
+            "⚠️ A resposta era grande demais e foi cortada. "
+            "Tenta reduzir o escopo (uma cidade ou um tipo de produto por vez)."
+        )

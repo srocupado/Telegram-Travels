@@ -9,6 +9,7 @@ from aiogram.types import Message
 from anthropic import AsyncAnthropic
 
 from bot.config import Settings
+from bot.services.long_form import generate_long_form
 
 logger = logging.getLogger(__name__)
 router = Router(name="roteiro")
@@ -65,24 +66,21 @@ async def cmd_roteiro(
         )
         return
 
-    await message.answer("🗺️ Montando o roteiro… (pode levar uns 20s)")
+    await message.answer(
+        "🗺️ Montando o roteiro… (roteiros longos podem levar 30–60s)"
+    )
 
-    try:
-        response = await claude.messages.create(
-            model=settings.sonnet_model,
-            max_tokens=4096,
-            system=ROTEIRO_SYSTEM,
-            messages=[{"role": "user", "content": command.args}],
-        )
-    except Exception as e:
-        logger.exception("roteiro failed")
-        await message.answer(f"❌ Falhou: {type(e).__name__}: {e}")
+    result = await generate_long_form(claude, settings, ROTEIRO_SYSTEM, command.args)
+
+    if result.error:
+        await message.answer(result.error)
         return
 
-    text = next((b.text for b in response.content if b.type == "text"), "").strip()
-    if not text:
-        await message.answer("A IA voltou vazia. Tenta de novo com mais detalhes?")
-        return
-
-    for chunk in _split_for_telegram(text):
+    for chunk in _split_for_telegram(result.text):
         await message.answer(chunk)
+
+    if result.truncated:
+        await message.answer(
+            "⚠️ O roteiro era grande demais e foi cortado no meio. "
+            "Tenta pedir menos dias por vez (ex: divida em 2 partes de 10 dias)."
+        )
