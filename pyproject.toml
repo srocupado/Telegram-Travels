@@ -1,7 +1,7 @@
 [project]
 name = "telegram-travels"
-version = "0.1.0"
-description = "Telegram bot para viagens"
+version = "0.2.0"
+description = "Telegram bot para alertas de viagens (passagens + hotéis)"
 requires-python = ">=3.12"
 dependencies = [
     "aiogram~=3.13",
@@ -9,6 +9,8 @@ dependencies = [
     "aiosqlite~=0.20",
     "pydantic-settings~=2.6",
     "python-json-logger~=2.0",
+    "anthropic~=0.40",
+    "httpx~=0.27",
 ]
 
 [project.optional-dependencies]

@@ -21,7 +21,9 @@ RUN pip install \
         "sqlalchemy[asyncio]~=2.0.36" \
         "aiosqlite~=0.20" \
         "pydantic-settings~=2.6" \
-        "python-json-logger~=2.0"
+        "python-json-logger~=2.0" \
+        "anthropic~=0.40" \
+        "httpx~=0.27"
 
 COPY --chown=bot:bot . .
 

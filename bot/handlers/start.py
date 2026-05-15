@@ -9,11 +9,34 @@ from bot.db.models import User
 router = Router(name="start")
 
 
+WELCOME = (
+    "Olá! Sou seu agente de viagens. Monitoro preços de passagens e hotéis e te aviso quando cair.\n\n"
+    "Como usar: me mande uma mensagem como\n"
+    "• <i>passagem GRU → EZE em 12 de julho, até R$ 1800</i>\n"
+    "• <i>hotel em Buenos Aires de 12 a 15 de julho, até R$ 400 a diária</i>\n\n"
+    "Use /help pra ver todos os comandos."
+)
+
+HELP = (
+    "<b>Como usar</b>\n"
+    "Mande o pedido em português livre — eu interpreto e crio o monitoramento.\n\n"
+    "<b>Comandos</b>\n"
+    "/start - boas-vindas\n"
+    "/help - esta ajuda\n"
+    "/ping - testa a conexão com a IA\n"
+    "/search &lt;texto&gt; - busca preço agora, sem criar alerta\n"
+    "/list - seus monitoramentos ativos\n"
+    "/pause &lt;id&gt; - pausa um monitoramento\n"
+    "/resume &lt;id&gt; - retoma\n"
+    "/delete &lt;id&gt; - apaga\n"
+    "/snooze &lt;id&gt; &lt;horas&gt; - silencia alertas por N horas\n"
+)
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, session: AsyncSession) -> None:
     if message.from_user is None:
         return
-
     tg_id = message.from_user.id
     existing = await session.scalar(select(User).where(User.telegram_id == tg_id))
     if existing is None:
@@ -25,17 +48,9 @@ async def cmd_start(message: Message, session: AsyncSession) -> None:
             )
         )
         await session.commit()
-
-    await message.answer(
-        "Olá! Sou o bot de viagens. Mande /help para ver o que sei fazer."
-    )
+    await message.answer(WELCOME)
 
 
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
-    await message.answer(
-        "Comandos:\n"
-        "/start - registra você no bot\n"
-        "/help - mostra esta ajuda\n"
-        "Qualquer outro texto eu repito de volta (por enquanto)."
-    )
+    await message.answer(HELP)
