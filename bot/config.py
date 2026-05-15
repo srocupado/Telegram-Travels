@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     bot_token: SecretStr
     anthropic_api_key: SecretStr
     serpapi_key: SecretStr
+    access_password: SecretStr
     database_path: str = "/data/travels.db"
     log_level: str = "INFO"
     log_json: bool = True
