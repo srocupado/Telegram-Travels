@@ -9,8 +9,7 @@ from aiogram.types import Message
 from anthropic import AsyncAnthropic
 
 from bot.config import Settings
-from bot.handlers.roteiro import _split_for_telegram
-from bot.services.long_form import generate_long_form
+from bot.services.long_form import stream_long_form_to_telegram
 
 logger = logging.getLogger(__name__)
 router = Router(name="compras")
@@ -49,18 +48,11 @@ async def cmd_compras(
         )
         return
 
-    await message.answer("🛍️ Pesquisando lugares… (pode levar uns 30s)")
+    placeholder = await message.answer("🛍️ Pesquisando lugares… acompanhe abaixo:")
 
-    result = await generate_long_form(
-        claude, settings, COMPRAS_SYSTEM, command.args, max_tokens=8000
+    result = await stream_long_form_to_telegram(
+        claude, settings, COMPRAS_SYSTEM, command.args, placeholder, max_tokens=8000
     )
-
-    if result.error:
-        await message.answer(result.error)
-        return
-
-    for chunk in _split_for_telegram(result.text):
-        await message.answer(chunk)
 
     if result.truncated:
         await message.answer(

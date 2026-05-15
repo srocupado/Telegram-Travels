@@ -9,12 +9,10 @@ from aiogram.types import Message
 from anthropic import AsyncAnthropic
 
 from bot.config import Settings
-from bot.services.long_form import generate_long_form
+from bot.services.long_form import stream_long_form_to_telegram
 
 logger = logging.getLogger(__name__)
 router = Router(name="roteiro")
-
-TELEGRAM_LIMIT = 4000
 
 ROTEIRO_SYSTEM = """Você cria roteiros de viagem em português brasileiro, prontos pra serem lidos em um app de mensagens.
 
@@ -34,24 +32,6 @@ Regras:
 """
 
 
-def _split_for_telegram(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
-    if len(text) <= limit:
-        return [text]
-    parts: list[str] = []
-    remaining = text
-    while len(remaining) > limit:
-        split_at = remaining.rfind("\n\n", 0, limit)
-        if split_at <= 0:
-            split_at = remaining.rfind("\n", 0, limit)
-        if split_at <= 0:
-            split_at = limit
-        parts.append(remaining[:split_at].rstrip())
-        remaining = remaining[split_at:].lstrip()
-    if remaining:
-        parts.append(remaining)
-    return parts
-
-
 @router.message(Command("roteiro"))
 async def cmd_roteiro(
     message: Message,
@@ -66,18 +46,11 @@ async def cmd_roteiro(
         )
         return
 
-    await message.answer(
-        "🗺️ Montando o roteiro… (roteiros longos podem levar 30–60s)"
+    placeholder = await message.answer("🗺️ Montando o roteiro… acompanhe abaixo:")
+
+    result = await stream_long_form_to_telegram(
+        claude, settings, ROTEIRO_SYSTEM, command.args, placeholder
     )
-
-    result = await generate_long_form(claude, settings, ROTEIRO_SYSTEM, command.args)
-
-    if result.error:
-        await message.answer(result.error)
-        return
-
-    for chunk in _split_for_telegram(result.text):
-        await message.answer(chunk)
 
     if result.truncated:
         await message.answer(

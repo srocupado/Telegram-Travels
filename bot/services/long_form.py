@@ -1,30 +1,58 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 
 import anthropic
+from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
+from aiogram.types import Message
 from anthropic import AsyncAnthropic
 
 from bot.config import Settings
 
 logger = logging.getLogger(__name__)
 
+TELEGRAM_LIMIT = 3800
+EDIT_INTERVAL = 1.5
+
 
 @dataclass
-class LongFormResult:
-    text: str
+class StreamResult:
     error: str | None
     truncated: bool
 
 
-async def generate_long_form(
+def _split_index(text: str, limit: int) -> int:
+    if len(text) <= limit:
+        return len(text)
+    candidates = [text.rfind("\n\n", 0, limit), text.rfind("\n", 0, limit), text.rfind(". ", 0, limit)]
+    best = max(c for c in candidates if c >= 0) if any(c >= 0 for c in candidates) else -1
+    return best if best > 200 else limit
+
+
+async def _safe_edit(msg: Message, text: str) -> None:
+    if not text.strip():
+        return
+    try:
+        await msg.edit_text(text)
+    except TelegramRetryAfter as e:
+        logger.info("telegram rate limited; retry after %ss", e.retry_after)
+    except TelegramBadRequest as e:
+        msg_text = str(e).lower()
+        if "not modified" in msg_text or "can't parse" in msg_text or "can't find" in msg_text:
+            return
+        logger.warning("edit_text failed: %s", e)
+
+
+async def stream_long_form_to_telegram(
     client: AsyncAnthropic,
     settings: Settings,
     system: str,
     user_text: str,
+    placeholder: Message,
     max_tokens: int = 16000,
-) -> LongFormResult:
+) -> StreamResult:
     try:
         async with client.messages.stream(
             model=settings.sonnet_model,
@@ -32,38 +60,65 @@ async def generate_long_form(
             system=system,
             messages=[{"role": "user", "content": user_text}],
         ) as stream:
-            message = await stream.get_final_message()
+            messages: list[Message] = [placeholder]
+            current = ""
+            last_edit = 0.0
+
+            async for delta in stream.text_stream:
+                current += delta
+
+                while len(current) > TELEGRAM_LIMIT:
+                    split = _split_index(current, TELEGRAM_LIMIT)
+                    await _safe_edit(messages[-1], current[:split].rstrip())
+                    current = current[split:].lstrip()
+                    new_msg = await placeholder.answer(current or "…")
+                    messages.append(new_msg)
+                    last_edit = time.monotonic()
+
+                now = time.monotonic()
+                if now - last_edit >= EDIT_INTERVAL and current.strip():
+                    await _safe_edit(messages[-1], current)
+                    last_edit = now
+
+            final = await stream.get_final_message()
+            if current.strip():
+                await _safe_edit(messages[-1], current)
+
+            if final.stop_reason == "refusal":
+                await _safe_edit(
+                    placeholder,
+                    "🙅 A IA recusou esse pedido por questões de política. Reformule sem temas sensíveis.",
+                )
+                return StreamResult(error="refusal", truncated=False)
+
+            return StreamResult(error=None, truncated=final.stop_reason == "max_tokens")
+
     except anthropic.APITimeoutError:
-        return LongFormResult("", "⏱️ A IA demorou demais pra responder. Tenta de novo.", False)
+        await _safe_edit(placeholder, "⏱️ A IA demorou demais pra responder. Tenta de novo.")
+        return StreamResult(error="timeout", truncated=False)
     except anthropic.RateLimitError:
-        return LongFormResult(
-            "", "🚦 Estamos no limite de uso da IA agora. Espera uns minutos e tenta de novo.", False
+        await _safe_edit(
+            placeholder,
+            "🚦 Estamos no limite de uso da IA agora. Espera uns minutos e tenta de novo.",
         )
+        return StreamResult(error="rate_limit", truncated=False)
     except anthropic.AuthenticationError:
         logger.exception("anthropic auth error")
-        return LongFormResult(
-            "", "🔑 Problema de autenticação com a IA. Avise o admin.", False
-        )
+        await _safe_edit(placeholder, "🔑 Problema de autenticação com a IA. Avise o admin.")
+        return StreamResult(error="auth", truncated=False)
     except anthropic.APIStatusError as e:
         logger.exception("anthropic api status error")
-        if e.status_code >= 500:
-            return LongFormResult("", "🛠️ Instabilidade na IA. Tenta de novo daqui a pouco.", False)
-        return LongFormResult("", f"❌ Erro da IA ({e.status_code}). Tenta reformular.", False)
+        msg = (
+            "🛠️ Instabilidade na IA. Tenta de novo daqui a pouco."
+            if e.status_code >= 500
+            else f"❌ Erro da IA ({e.status_code}). Tenta reformular."
+        )
+        await _safe_edit(placeholder, msg)
+        return StreamResult(error="api_status", truncated=False)
     except anthropic.APIConnectionError:
-        return LongFormResult("", "🌐 Falha de conexão com a IA. Tenta de novo.", False)
+        await _safe_edit(placeholder, "🌐 Falha de conexão com a IA. Tenta de novo.")
+        return StreamResult(error="connection", truncated=False)
     except Exception:
         logger.exception("long_form unexpected failure")
-        return LongFormResult("", "❌ Algo deu errado. Tenta de novo.", False)
-
-    if message.stop_reason == "refusal":
-        return LongFormResult(
-            "", "🙅 A IA recusou esse pedido por questões de política. Reformule sem temas sensíveis.", False
-        )
-
-    text = next((b.text for b in message.content if b.type == "text"), "").strip()
-    truncated = message.stop_reason == "max_tokens"
-
-    if not text:
-        return LongFormResult("", "A IA voltou vazia. Tenta de novo com mais detalhes.", False)
-
-    return LongFormResult(text=text, error=None, truncated=truncated)
+        await _safe_edit(placeholder, "❌ Algo deu errado. Tenta de novo.")
+        return StreamResult(error="unknown", truncated=False)
