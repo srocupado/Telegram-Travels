@@ -26,6 +26,7 @@ HELP = (
     "/help - esta ajuda\n"
     "/ping - testa a conexão com a IA\n"
     "/roteiro &lt;destino e detalhes&gt; - gera roteiro dia a dia\n"
+    "/compras &lt;o que e onde&gt; - guia de onde comprar\n"
     "/search &lt;texto&gt; - busca preço agora, sem criar alerta\n"
     "/list - seus monitoramentos ativos\n"
     "/pause &lt;id&gt; - pausa um monitoramento\n"
