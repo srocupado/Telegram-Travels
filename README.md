@@ -7,9 +7,10 @@ Roda numa VM micro grátis (Google Cloud `e2-micro`, Oracle AMD `E2.1.Micro` ou 
 ## Funcionalidades
 
 - **Conversa stateful em português** — você escreve livremente (*"quero ir pra Buenos Aires em julho, até R$ 2000"*); o bot pergunta o que faltar, propõe um resumo e cria o monitoramento depois de confirmar.
-- **Alertas de preço** — checagem automática 1x/dia via SerpAPI (Google Flights + Google Hotels). Dispara quando o preço fica abaixo do teto definido ou bate uma nova mínima histórica (≥10% abaixo), com cooldown de 12h e silenciamento manual.
+- **Alertas de preço completos** — checagem automática 1x/dia via SerpAPI (Google Flights + Google Hotels). Dispara quando o preço fica abaixo do teto definido ou bate uma nova mínima histórica (≥10% abaixo), com cooldown de 12h e silenciamento manual. Cada alerta inclui **todos os detalhes** do voo (companhia, número, horários, aeroportos, duração, conexões) ou do hotel (estrelas, avaliação, comodidades, check-in/out, localização).
 - **Roteiros sob medida** — `/roteiro` gera itinerário dia a dia (Manhã/Tarde/Noite) usando Sonnet 4.6, com streaming ao vivo no chat. Comporta viagens de 30+ dias.
 - **Guia de compras** — `/compras` retorna onde encontrar produtos específicos em uma cidade, agrupado por bairro/shopping/mercado.
+- **Follow-up** — `/seguir <pergunta>` faz perguntas adicionais sobre a última `/roteiro` ou `/compras` aproveitando o contexto da resposta anterior (até 6 turnos, expira em 30 min).
 - **Acesso protegido** — senha única configurável; usuários não autorizados recebem prompt de senha e nada mais.
 - **Isolamento por usuário** — cada um vê e gerencia só seus próprios monitoramentos; alertas vão pro chat do dono.
 - **Backup diário** — dump SQLite gzipado, retenção de 14 dias.
@@ -32,7 +33,8 @@ Roda numa VM micro grátis (Google Cloud `e2-micro`, Oracle AMD `E2.1.Micro` ou 
 | `/ping` | Testa a conexão com a Claude API |
 | `/roteiro <destino e detalhes>` | Gera roteiro dia a dia (até ~30 dias) |
 | `/compras <o que> em <cidade>` | Guia de onde comprar no destino |
-| `/search <pedido>` | Consulta preço agora, sem criar alerta |
+| `/seguir <pergunta>` | Follow-up sobre o último `/roteiro` ou `/compras` |
+| `/search <pedido>` | Consulta preço agora, sem criar alerta — retorna detalhes completos do voo/hotel |
 | `/list` | Lista seus monitoramentos |
 | `/pause <id>` | Pausa um monitoramento |
 | `/resume <id>` | Retoma |
@@ -129,7 +131,8 @@ bot/
 │   ├── ping.py              # /ping
 │   ├── roteiro.py           # /roteiro
 │   ├── compras.py           # /compras
-│   ├── search.py            # /search
+│   ├── followup.py          # /seguir
+│   ├── search.py            # /search (com detalhes completos)
 │   ├── manage.py            # /list, /pause, /resume, /delete, /snooze
 │   └── watch.py             # texto livre → conversa stateful
 ├── middlewares/
@@ -137,12 +140,13 @@ bot/
 │   └── db.py                # injeta session + deps em todos os handlers
 └── services/
     ├── claude_client.py     # construtor do AsyncAnthropic
-    ├── serpapi_client.py    # wrapper httpx + extratores de melhor preço
+    ├── serpapi_client.py    # wrapper httpx + extratores + formatadores
     ├── parser.py            # parser one-shot (uso interno + /search)
-    ├── chat.py              # conversa stateful com TTL em memória
-    ├── long_form.py         # geração com streaming ao vivo no Telegram
+    ├── chat.py              # conversa stateful (criação de watch)
+    ├── long_form.py         # streaming ao vivo de /roteiro e /compras
+    ├── long_form_chat.py    # contexto de follow-up pra /seguir
     ├── alerts.py            # regra de disparo + compositor de mensagem
-    └── scheduler.py         # loop assíncrono que cheka watches devidos
+    └── scheduler.py         # loop que checa watches e envia alertas com detalhes
 ```
 
 ### Modelo de dados
@@ -163,7 +167,8 @@ Texto livre → AuthMiddleware → DepsMiddleware (sessão SQLA)
             → grava Watch (status=active)
             → scheduler tick (a cada hora) seleciona watches due
             → SerpAPI fetch → snapshot → should_alert()
-            → compose_alert_message(Claude Haiku) → bot.send_message
+            → compose_alert_message(Claude Haiku) + format_flight/format_hotel
+            → bot.send_message (headline + bloco completo de detalhes)
 ```
 
 ## Custos
@@ -176,7 +181,7 @@ Operação típica de uso pessoal/família (5–20 usuários, dezenas de watches
 
 ## Limites conhecidos
 
-- **Não tem FSM persistente** — sessões de conversa ficam só em RAM (TTL 30 min). Reiniciar o container apaga conversas em andamento (não os monitoramentos).
+- **Não tem FSM persistente** — sessões de conversa e contexto de `/seguir` ficam só em RAM (TTL 30 min). Reiniciar o container apaga conversas em andamento (não os monitoramentos).
 - **Códigos IATA via IA** — depende do Claude conhecer o aeroporto. Cidades pequenas podem não funcionar; nesse caso, o usuário pode digitar o IATA direto.
 - **Schema sem migrations** — mudanças destrutivas na tabela exigem trabalho manual ou adoção de Alembic.
 - **Sem testes automatizados** — escala pessoal; quando crescer, vale adicionar pytest + factory_boy.
