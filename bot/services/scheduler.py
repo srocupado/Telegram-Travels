@@ -17,6 +17,8 @@ from bot.services.serpapi_client import (
     SerpAPIError,
     extract_best_flight,
     extract_best_hotel,
+    format_flight,
+    format_hotel,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,11 +82,19 @@ async def check_watch(
         watch.min_price_seen = price
 
     if fire:
-        message = await compose_alert_message(claude, settings, watch, price, reason)
+        headline = await compose_alert_message(claude, settings, watch, price, reason)
+        details = (
+            format_flight(price, payload)
+            if watch.kind == "flight"
+            else format_hotel(price, payload)
+        )
+        message = f"{headline}\n\n{details}"
         user = await session.get(User, watch.user_id)
         if user is not None:
             try:
-                await bot.send_message(user.telegram_id, message)
+                await bot.send_message(
+                    user.telegram_id, message, disable_web_page_preview=True
+                )
             except Exception:
                 logger.exception("failed to send alert for watch %d", watch.id)
             else:

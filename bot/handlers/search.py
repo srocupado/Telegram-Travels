@@ -15,6 +15,8 @@ from bot.services.serpapi_client import (
     SerpAPIError,
     extract_best_flight,
     extract_best_hotel,
+    format_flight,
+    format_hotel,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,7 +32,9 @@ async def cmd_search(
     settings: Settings,
 ) -> None:
     if not command.args:
-        await message.answer("Uso: /search <descrição>. Ex: /search GRU EZE 12/07 ida e volta 19/07")
+        await message.answer(
+            "Uso: /search &lt;descrição&gt;. Ex: /search GRU EZE 12/07 ida e volta 19/07"
+        )
         return
 
     await message.answer("🔎 Buscando…")
@@ -73,7 +77,11 @@ async def cmd_search(
         await message.answer(f"Nenhum preço encontrado para: {parsed.summary}")
         return
 
-    price, _ = best
-    await message.answer(
-        f"{parsed.summary}\nMelhor preço agora: <b>R$ {price:.2f}</b>"
+    price, payload = best
+    header = f"<b>{parsed.summary}</b>"
+    body = (
+        format_flight(price, payload)
+        if parsed.kind == "flight"
+        else format_hotel(price, payload)
     )
+    await message.answer(f"{header}\n\n{body}", disable_web_page_preview=True)

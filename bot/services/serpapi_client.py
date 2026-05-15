@@ -110,3 +110,132 @@ def extract_best_hotel(raw: dict[str, Any]) -> tuple[float, dict[str, Any]] | No
     if not priced:
         return None
     return min(priced, key=lambda t: t[0])
+
+
+def _fmt_duration(mins: Any) -> str:
+    if not isinstance(mins, (int, float)) or mins <= 0:
+        return "?"
+    h, m = divmod(int(mins), 60)
+    if h and m:
+        return f"{h}h{m:02d}"
+    if h:
+        return f"{h}h"
+    return f"{m}min"
+
+
+def _fmt_time(s: Any) -> str:
+    if not isinstance(s, str) or not s:
+        return "?"
+    parts = s.split(" ")
+    return parts[1] if len(parts) > 1 else s
+
+
+def format_flight(price: float, payload: dict[str, Any]) -> str:
+    lines: list[str] = [f"💰 <b>R$ {price:.2f}</b>"]
+
+    total_duration = payload.get("total_duration")
+    if total_duration:
+        lines.append(f"⏱ Duração total: {_fmt_duration(total_duration)}")
+
+    trip_type = payload.get("type")
+    if trip_type:
+        lines.append(f"🔁 {trip_type}")
+
+    flights = payload.get("flights") or []
+    layovers = payload.get("layovers") or []
+    lines.append("")
+
+    for i, flight in enumerate(flights):
+        airline = flight.get("airline", "?")
+        flight_number = flight.get("flight_number", "")
+        airplane = flight.get("airplane") or ""
+        travel_class = flight.get("travel_class") or ""
+
+        dep = flight.get("departure_airport") or {}
+        arr = flight.get("arrival_airport") or {}
+
+        header = f"<b>{airline} {flight_number}</b>".rstrip()
+        details: list[str] = []
+        if travel_class:
+            details.append(travel_class)
+        if airplane:
+            details.append(airplane)
+        if details:
+            header += f" — {' / '.join(details)}"
+        lines.append(header)
+
+        dep_name = dep.get("name") or "?"
+        dep_id = dep.get("id") or ""
+        arr_name = arr.get("name") or "?"
+        arr_id = arr.get("id") or ""
+        lines.append(f"  🛫 {_fmt_time(dep.get('time'))} {dep_name} ({dep_id})")
+        lines.append(f"  🛬 {_fmt_time(arr.get('time'))} {arr_name} ({arr_id})")
+
+        leg_dur = flight.get("duration")
+        if leg_dur:
+            lines.append(f"  ⏱ {_fmt_duration(leg_dur)}")
+
+        if flight.get("overnight"):
+            lines.append("  🌙 voo noturno")
+
+        if i < len(layovers):
+            lay = layovers[i]
+            lay_name = lay.get("name") or lay.get("id") or "?"
+            lines.append(
+                f"  ⤷ Conexão em {lay_name}: {_fmt_duration(lay.get('duration'))}"
+            )
+
+    extensions = payload.get("extensions") or []
+    if extensions:
+        lines.append("")
+        for ext in extensions[:4]:
+            lines.append(f"• {ext}")
+
+    return "\n".join(lines)
+
+
+def format_hotel(price: float, payload: dict[str, Any]) -> str:
+    name = payload.get("name") or "Hotel"
+    hotel_class = payload.get("hotel_class") or ""
+    rating = payload.get("overall_rating")
+    reviews = payload.get("reviews")
+    check_in = payload.get("check_in_time")
+    check_out = payload.get("check_out_time")
+    amenities = payload.get("amenities") or []
+    description = payload.get("description")
+    nearby = payload.get("nearby_places") or []
+    link = payload.get("link")
+
+    lines: list[str] = [f"💰 <b>R$ {price:.2f}</b> / diária"]
+    lines.append(f"🏨 <b>{name}</b>")
+    if hotel_class:
+        lines.append(f"  {hotel_class}")
+    if rating:
+        rating_line = f"  ⭐ {rating}"
+        if reviews:
+            rating_line += f" ({reviews} avaliações)"
+        lines.append(rating_line)
+    if check_in or check_out:
+        lines.append(
+            f"  🕐 Check-in {check_in or '?'} · Check-out {check_out or '?'}"
+        )
+    if amenities:
+        top = amenities[:6]
+        lines.append(f"  ✨ {', '.join(str(a) for a in top)}")
+    if nearby:
+        first = nearby[0]
+        if isinstance(first, dict) and first.get("name"):
+            transp = first.get("transportations") or []
+            extra = ""
+            if transp and isinstance(transp[0], dict):
+                extra = f" ({transp[0].get('duration', '')} {transp[0].get('type', '')})".strip()
+            lines.append(f"  📍 Perto de: {first['name']}{extra}")
+    if description:
+        lines.append("")
+        text = str(description)
+        lines.append(text[:300] + ("…" if len(text) > 300 else ""))
+    if link:
+        lines.append("")
+        lines.append(f'🔗 <a href="{link}">Ver no Google Hotels</a>')
+
+    return "\n".join(lines)
