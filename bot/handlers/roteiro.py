@@ -49,7 +49,7 @@ async def cmd_roteiro(
     placeholder = await message.answer("🗺️ Montando o roteiro… acompanhe abaixo:")
 
     result = await stream_long_form_to_telegram(
-        claude, settings, ROTEIRO_SYSTEM, command.args, placeholder
+        claude, settings, ROTEIRO_SYSTEM, command.args, placeholder, max_tokens=32000
     )
 
     if result.truncated:
