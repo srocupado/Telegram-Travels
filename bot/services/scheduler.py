@@ -162,13 +162,27 @@ async def check_watch(
         message = f"{headline}\n\n{details}"
         user = await session.get(User, watch.user_id)
         if user is not None:
+            sent = False
             try:
                 await bot.send_message(
                     user.telegram_id, message, disable_web_page_preview=True
                 )
+                sent = True
             except Exception:
-                logger.exception("failed to send alert for watch %d", watch.id)
-            else:
+                logger.exception(
+                    "HTML send failed; retrying as plain text for watch %d", watch.id
+                )
+                try:
+                    await bot.send_message(
+                        user.telegram_id,
+                        message,
+                        parse_mode=None,
+                        disable_web_page_preview=True,
+                    )
+                    sent = True
+                except Exception:
+                    logger.exception("failed to send alert for watch %d", watch.id)
+            if sent:
                 watch.last_alert_at = now
                 session.add(
                     Alert(

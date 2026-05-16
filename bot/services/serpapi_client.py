@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import logging
 from datetime import date, timedelta
 from typing import Any
@@ -229,6 +230,10 @@ _PRICE_LEVEL_LABEL = {
 }
 
 
+def _h(value: Any) -> str:
+    return html.escape(str(value)) if value is not None else ""
+
+
 def format_flight(
     price: float,
     payload: dict[str, Any],
@@ -266,7 +271,7 @@ def format_flight(
 
     trip_type = payload.get("type")
     if trip_type:
-        lines.append(f"🔁 {trip_type}")
+        lines.append(f"🔁 {_h(trip_type)}")
 
     flights = payload.get("flights") or []
     layovers = payload.get("layovers") or []
@@ -281,12 +286,12 @@ def format_flight(
         dep = flight.get("departure_airport") or {}
         arr = flight.get("arrival_airport") or {}
 
-        header = f"<b>{airline} {flight_number}</b>".rstrip()
+        header = f"<b>{_h(airline)} {_h(flight_number)}</b>".rstrip()
         details: list[str] = []
         if travel_class:
-            details.append(travel_class)
+            details.append(_h(travel_class))
         if airplane:
-            details.append(airplane)
+            details.append(_h(airplane))
         if details:
             header += f" — {' / '.join(details)}"
         lines.append(header)
@@ -295,12 +300,12 @@ def format_flight(
         dep_id = dep.get("id") or ""
         arr_name = arr.get("name") or "?"
         arr_id = arr.get("id") or ""
-        lines.append(f"  🛫 {_fmt_time(dep.get('time'))} {dep_name} ({dep_id})")
-        lines.append(f"  🛬 {_fmt_time(arr.get('time'))} {arr_name} ({arr_id})")
+        lines.append(f"  🛫 {_h(_fmt_time(dep.get('time')))} {_h(dep_name)} ({_h(dep_id)})")
+        lines.append(f"  🛬 {_h(_fmt_time(arr.get('time')))} {_h(arr_name)} ({_h(arr_id)})")
 
         leg_dur = flight.get("duration")
         if leg_dur:
-            lines.append(f"  ⏱ {_fmt_duration(leg_dur)}")
+            lines.append(f"  ⏱ {_h(_fmt_duration(leg_dur))}")
 
         if flight.get("overnight"):
             lines.append("  🌙 voo noturno")
@@ -309,14 +314,14 @@ def format_flight(
             lay = layovers[i]
             lay_name = lay.get("name") or lay.get("id") or "?"
             lines.append(
-                f"  ⤷ Conexão em {lay_name}: {_fmt_duration(lay.get('duration'))}"
+                f"  ⤷ Conexão em {_h(lay_name)}: {_h(_fmt_duration(lay.get('duration')))}"
             )
 
     extensions = payload.get("extensions") or []
     if extensions:
         lines.append("")
         for ext in extensions[:4]:
-            lines.append(f"• {ext}")
+            lines.append(f"• {_h(ext)}")
 
     return "\n".join(lines)
 
@@ -349,21 +354,21 @@ def format_hotel(
             )
         except ValueError:
             lines.append(f"📅 {chosen_check_in} → {chosen_check_out}")
-    lines.append(f"🏨 <b>{name}</b>")
+    lines.append(f"🏨 <b>{_h(name)}</b>")
     if hotel_class:
-        lines.append(f"  {hotel_class}")
+        lines.append(f"  {_h(hotel_class)}")
     if rating:
-        rating_line = f"  ⭐ {rating}"
+        rating_line = f"  ⭐ {_h(rating)}"
         if reviews:
-            rating_line += f" ({reviews} avaliações)"
+            rating_line += f" ({_h(reviews)} avaliações)"
         lines.append(rating_line)
     if check_in or check_out:
         lines.append(
-            f"  🕐 Check-in {check_in or '?'} · Check-out {check_out or '?'}"
+            f"  🕐 Check-in {_h(check_in or '?')} · Check-out {_h(check_out or '?')}"
         )
     if amenities:
         top = amenities[:6]
-        lines.append(f"  ✨ {', '.join(str(a) for a in top)}")
+        lines.append(f"  ✨ {_h(', '.join(str(a) for a in top))}")
     if nearby:
         first = nearby[0]
         if isinstance(first, dict) and first.get("name"):
@@ -371,13 +376,13 @@ def format_hotel(
             extra = ""
             if transp and isinstance(transp[0], dict):
                 extra = f" ({transp[0].get('duration', '')} {transp[0].get('type', '')})".strip()
-            lines.append(f"  📍 Perto de: {first['name']}{extra}")
+            lines.append(f"  📍 Perto de: {_h(first['name'])}{(' ' + _h(extra)) if extra else ''}")
     if description:
         lines.append("")
         text = str(description)
-        lines.append(text[:300] + ("…" if len(text) > 300 else ""))
+        lines.append(_h(text[:300] + ("…" if len(text) > 300 else "")))
     if link:
         lines.append("")
-        lines.append(f'🔗 <a href="{link}">Ver no Google Hotels</a>')
+        lines.append(f'🔗 <a href="{_h(link)}">Ver no Google Hotels</a>')
 
     return "\n".join(lines)
