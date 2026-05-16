@@ -34,7 +34,7 @@ Roda numa VM micro grátis (Google Cloud `e2-micro`, Oracle AMD `E2.1.Micro` ou 
 | `/roteiro <destino e detalhes>` | Gera roteiro dia a dia (até ~30 dias) |
 | `/compras <o que> em <cidade>` | Guia de onde comprar no destino |
 | `/seguir <pergunta>` | Follow-up sobre o último `/roteiro` ou `/compras` |
-| `/search <pedido>` | Consulta preço agora, sem criar alerta — retorna detalhes completos do voo/hotel |
+| `/pesquisa <pedido>` | Consulta preço agora, sem criar alerta — retorna detalhes completos do voo/hotel |
 | `/list` | Lista seus monitoramentos |
 | `/pause <id>` | Pausa um monitoramento |
 | `/resume <id>` | Retoma |
@@ -132,7 +132,7 @@ bot/
 │   ├── roteiro.py           # /roteiro
 │   ├── compras.py           # /compras
 │   ├── followup.py          # /seguir
-│   ├── search.py            # /search (com detalhes completos)
+│   ├── search.py            # /pesquisa (com detalhes completos)
 │   ├── manage.py            # /list, /pause, /resume, /delete, /snooze
 │   └── watch.py             # texto livre → conversa stateful
 ├── middlewares/
@@ -141,7 +141,7 @@ bot/
 └── services/
     ├── claude_client.py     # construtor do AsyncAnthropic
     ├── serpapi_client.py    # wrapper httpx + extratores + formatadores
-    ├── parser.py            # parser one-shot (uso interno + /search)
+    ├── parser.py            # parser one-shot (uso interno + /pesquisa)
     ├── chat.py              # conversa stateful (criação de watch)
     ├── long_form.py         # streaming ao vivo de /roteiro e /compras
     ├── long_form_chat.py    # contexto de follow-up pra /seguir

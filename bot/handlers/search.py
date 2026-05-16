@@ -22,10 +22,10 @@ from bot.services.serpapi_client import (
 )
 
 logger = logging.getLogger(__name__)
-router = Router(name="search")
+router = Router(name="pesquisa")
 
 
-@router.message(Command("search"))
+@router.message(Command("pesquisa"))
 async def cmd_search(
     message: Message,
     command: CommandObject,
@@ -35,7 +35,7 @@ async def cmd_search(
 ) -> None:
     if not command.args:
         await message.answer(
-            "Uso: /search &lt;descrição&gt;. Ex: /search GRU EZE 12/07 ida e volta 19/07"
+            "Uso: /pesquisa &lt;descrição&gt;. Ex: /pesquisa GRU EZE 12/07 ida e volta 19/07"
         )
         return
 

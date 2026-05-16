@@ -28,7 +28,7 @@ HELP = (
     "/roteiro &lt;destino e detalhes&gt; - gera roteiro dia a dia\n"
     "/compras &lt;o que e onde&gt; - guia de onde comprar\n"
     "/seguir &lt;pergunta&gt; - pergunta de follow-up sobre o último /roteiro ou /compras\n"
-    "/search &lt;texto&gt; - busca preço agora, sem criar alerta\n"
+    "/pesquisa &lt;texto&gt; - busca preço agora, sem criar alerta\n"
     "/list - seus monitoramentos ativos\n"
     "/pause &lt;id&gt; - pausa um monitoramento\n"
     "/resume &lt;id&gt; - retoma\n"

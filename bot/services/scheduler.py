@@ -23,13 +23,19 @@ from bot.services.serpapi_client import (
     format_hotel,
 )
 
-FLEX_FLIGHT_INTERVAL_HOURS = 72
+FLEX_FLIGHT_WEEKDAYS = (1, 3)
 
 
-def _interval_hours(watch: Watch, default_hours: int) -> int:
+def _is_due(watch: Watch, now_utc: datetime, default_hours: int) -> bool:
     if watch.kind == "flight" and watch.params.get("window_start"):
-        return FLEX_FLIGHT_INTERVAL_HOURS
-    return default_hours
+        if now_utc.weekday() not in FLEX_FLIGHT_WEEKDAYS:
+            return False
+        if watch.last_checked_at is None:
+            return True
+        return watch.last_checked_at.date() < now_utc.date()
+    if watch.last_checked_at is None:
+        return True
+    return now_utc - watch.last_checked_at >= timedelta(hours=default_hours)
 
 logger = logging.getLogger(__name__)
 
@@ -177,11 +183,10 @@ async def tick(
         stmt = select(Watch).where(Watch.status == "active")
         all_active = list((await session.scalars(stmt)).all())
 
-    due: list[Watch] = []
-    for w in all_active:
-        interval = _interval_hours(w, settings.watch_check_interval_hours)
-        if w.last_checked_at is None or now_utc - w.last_checked_at >= timedelta(hours=interval):
-            due.append(w)
+    due: list[Watch] = [
+        w for w in all_active
+        if _is_due(w, now_utc, settings.watch_check_interval_hours)
+    ]
 
     logger.info("scheduler tick: %d watch(es) due (of %d active)", len(due), len(all_active))
     for w in due:
