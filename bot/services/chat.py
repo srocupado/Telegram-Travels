@@ -30,7 +30,7 @@ Seu trabalho:
      Modo de datas:
      · DATAS FIXAS: depart_date e (opcional) return_date.
      · JANELA FLEXÍVEL: window_start, window_end e nights (estadia em dias). Use quando o usuário definir um INTERVALO de datas E uma DURAÇÃO de viagem MENOR que esse intervalo (ex: "entre 9/9 e 30/11, ficando 20 dias"). Vamos testar amostras dentro da janela.
-   - Hotel: cidade/região; modo de datas; adultos (default 2); teto opcional por diária em BRL.
+   - Hotel: location (pode ser cidade tipo "Buenos Aires", bairro "Recoleta, Buenos Aires", ou nome de hotel específico tipo "Hotel Faena Buenos Aires" — neste último caso a busca vai filtrar pra aquela propriedade); modo de datas; adultos (default 2); teto opcional por diária em BRL.
      Modo de datas:
      · DATAS FIXAS: check_in e check_out exatos (use quando o usuário definir início e fim).
      · JANELA FLEXÍVEL: window_start, window_end e nights (use quando o usuário disser algo como "2 noites entre 8 e 12 de julho" — vamos testar combinações dentro da janela e pegar a mais barata).

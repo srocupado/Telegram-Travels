@@ -54,7 +54,7 @@ Regras:
 - Modos de data pra passagem:
   (a) DATAS FIXAS: preencha depart_date (obrigatório) e return_date (opcional, null se one-way).
   (b) JANELA FLEXÍVEL: preencha window_start, window_end e nights (duração da estadia em dias). Use quando o usuário disser "ficando N dias" / "N dias de viagem" dentro de um intervalo (ex: "entre 9/9 e 30/11, ficando 20 dias"). Não preencha depart_date/return_date nesse caso.
-- Para hotéis: location é texto livre (ex: "Buenos Aires", "Centro de Lisboa"). Existem dois modos:
+- Para hotéis: location é texto livre. Pode ser cidade ("Buenos Aires"), bairro ("Recoleta, Buenos Aires") OU nome específico de um hotel ("Hotel Faena Buenos Aires", "Pestana Palace Lisboa"). Se o usuário pedir um hotel específico, coloque <i>nome do hotel + cidade</i> em location pra a busca filtrar pra aquela propriedade. Existem dois modos:
   (a) datas fixas: preencha check_in e check_out (datas exatas). Use quando o usuário definir início e fim da estadia.
   (b) janela flexível: preencha window_start, window_end e nights (número de noites a procurar dentro da janela). Use quando o usuário disser algo como "2 noites entre 8 e 12 de julho", "qualquer 3 diárias na primeira semana de agosto", "uma diária entre dia 5 e 10". Não preencha check_in/check_out nesse caso.
   Regra: se a duração explicitada (nights) é MENOR que o tamanho da janela (window_end - window_start), use modo (b). Se for IGUAL, use modo (a).
