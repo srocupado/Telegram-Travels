@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import html
 import logging
+import re
 import time
 from dataclasses import dataclass
+from urllib.parse import quote_plus
 
 import anthropic
 from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
@@ -15,6 +18,21 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_LIMIT = 3800
 EDIT_INTERVAL = 1.5
+
+_LINK_MARKER_RE = re.compile(r"\[\[([^|\]\[]+)\|([^\]\[]+)\]\]")
+
+
+def linkify_places(text: str) -> str:
+    def repl(m: re.Match[str]) -> str:
+        name = m.group(1).strip()
+        city = m.group(2).strip()
+        query = quote_plus(f"{name} {city}")
+        return (
+            f'<a href="https://www.google.com/maps/search/?api=1&amp;query={query}">'
+            f"{html.escape(name)}</a>"
+        )
+
+    return _LINK_MARKER_RE.sub(repl, text)
 
 
 @dataclass
@@ -33,10 +51,11 @@ def _split_index(text: str, limit: int) -> int:
 
 
 async def _safe_edit(msg: Message, text: str) -> None:
+    text = linkify_places(text)
     if not text.strip():
         return
     try:
-        await msg.edit_text(text)
+        await msg.edit_text(text, disable_web_page_preview=True)
     except TelegramRetryAfter as e:
         logger.info("telegram rate limited; retry after %ss", e.retry_after)
     except TelegramBadRequest as e:
@@ -75,7 +94,9 @@ async def stream_long_form_to_telegram(
                     await _safe_edit(messages[-1], finalized)
                     chunks.append(finalized)
                     current = current[split:].lstrip()
-                    new_msg = await placeholder.answer(current or "…")
+                    new_msg = await placeholder.answer(
+                        current or "…", disable_web_page_preview=True
+                    )
                     messages.append(new_msg)
                     last_edit = time.monotonic()
 

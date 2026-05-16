@@ -24,7 +24,8 @@ Regras:
 - Responda DIRETO e CURTO, focado só na nova pergunta.
 - Use o conteúdo anterior como contexto — não repita o que já foi dito.
 - HTML do Telegram permitido: <b>, <i>. NÃO use markdown.
-- Sem links, sem inventar dados que não estão na conversa.
+- Não invente dados que não estão na conversa.
+- Para qualquer lugar com nome próprio que mencionar (loja, atração, restaurante, bairro), envolva em [[Nome|Cidade]] — será convertido em link clicável pro Google Maps.
 - Se a pergunta sair completamente do tema (ex: outra cidade, outro produto), diga que pra isso é melhor usar /roteiro ou /compras de novo.
 """
 
@@ -115,7 +116,9 @@ async def stream_followup_to_telegram(
                     await _safe_edit(messages[-1], finalized)
                     chunks.append(finalized)
                     current = current[split:].lstrip()
-                    new_msg = await placeholder.answer(current or "…")
+                    new_msg = await placeholder.answer(
+                        current or "…", disable_web_page_preview=True
+                    )
                     messages.append(new_msg)
                     last_edit = time.monotonic()
 

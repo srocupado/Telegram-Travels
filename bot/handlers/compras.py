@@ -31,6 +31,7 @@ Regras:
 - Linha em branco entre lugares e antes de Dicas.
 - Se o usuário não disse o que quer comprar (só citou cidade), peça UMA pergunta curta de clarificação no lugar de gerar o guia.
 - Nomes de lugares e lojas devem ser reais e atuais.
+- Para cada lugar com nome próprio (shopping, mercado, loja, bairro, rua famosa), envolva em <code>[[Nome|Cidade]]</code> — será convertido em link clicável pro Google Maps (ex: <code>[[Shopping Patio Bullrich|Buenos Aires]]</code>). Não envolva descritivos genéricos ("uma loja qualquer", "vários shoppings").
 """
 
 
