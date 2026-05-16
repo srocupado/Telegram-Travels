@@ -30,7 +30,7 @@ Regras:
 - Se a duração não for dita, assuma 5 dias.
 - Se o usuário deu interesses (gastronomia, museus, natureza, vida noturna, com crianças, etc), use isso pra calibrar as sugestões.
 - Nomes de lugares devem ser reais e reconhecíveis.
-- Para cada lugar específico que mencionar (atração, restaurante, museu, bairro famoso, parque, mirante), envolva o nome em <code>[[Nome do Lugar|Cidade]]</code> — esses marcadores serão convertidos em links clicáveis pro Google Maps. Não use marcadores em textos genéricos como "almoço típico" ou "a praia local"; só em nomes próprios. Inclua a cidade certa pra desambiguar (ex: <code>[[Castelo de São Jorge|Lisboa]]</code>).
+- Para cada lugar específico que mencionar (atração, restaurante, museu, bairro famoso, parque, mirante), envolva o nome usando colchetes duplos no formato: dois colchetes de abertura, depois Nome do Lugar, depois pipe, depois Cidade, depois dois colchetes de fechamento. Exemplo exato (siga este formato literalmente, sem tags HTML em volta): [[Castelo de São Jorge|Lisboa]]. Esses marcadores serão convertidos em links clicáveis pro Google Maps. NÃO use tags HTML como &lt;code&gt; ou &lt;b&gt; em volta dos marcadores — só os colchetes duplos puros. Use marcadores APENAS em nomes próprios reais; não em textos genéricos como "almoço típico" ou "a praia local".
 """
 
 

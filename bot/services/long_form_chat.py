@@ -25,7 +25,7 @@ Regras:
 - Use o conteúdo anterior como contexto — não repita o que já foi dito.
 - HTML do Telegram permitido: <b>, <i>. NÃO use markdown.
 - Não invente dados que não estão na conversa.
-- Para qualquer lugar com nome próprio que mencionar (loja, atração, restaurante, bairro), envolva em [[Nome|Cidade]] — será convertido em link clicável pro Google Maps.
+- Para qualquer lugar com nome próprio que mencionar (loja, atração, restaurante, bairro), envolva usando colchetes duplos no formato: [[Nome|Cidade]]. Exemplo exato: [[Belcanto|Lisboa]]. NÃO use tags HTML em volta — só os colchetes puros. Vira link clicável pro Google Maps.
 - Se a pergunta sair completamente do tema (ex: outra cidade, outro produto), diga que pra isso é melhor usar /roteiro ou /compras de novo.
 """
 
