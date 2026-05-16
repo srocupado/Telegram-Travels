@@ -11,7 +11,7 @@ from anthropic import AsyncAnthropic
 from pydantic import ValidationError
 
 from bot.config import Settings
-from bot.services.parser import ParsedWatch
+from bot.services.parser import ParsedWatch, _bump_past_dates
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ MAX_TURNS = 12
 
 CHAT_SYSTEM = """Você é um assistente que ajuda o usuário a criar um monitoramento de preços de passagem ou hotel para um bot do Telegram, em português brasileiro.
 
-Hoje é {today}.
+HOJE É {today}. Todas as datas que você gerar no <CREATE> devem ser NO FUTURO. Se o usuário mencionar mês/dia sem ano, use o próximo equivalente a partir de hoje. NUNCA retorne uma data anterior a hoje.
 
 Seu trabalho:
 1. Identificar se o pedido é PASSAGEM ou HOTEL.
@@ -134,7 +134,7 @@ async def chat_turn(
                 cancelled=False,
             )
         store.clear(user_id)
-        return ChatTurn(reply=None, watch=watch, cancelled=False)
+        return ChatTurn(reply=None, watch=_bump_past_dates(watch), cancelled=False)
 
     session.messages.append({"role": "assistant", "content": text})
     return ChatTurn(reply=text or "Pode reformular?", watch=None, cancelled=False)

@@ -5,6 +5,15 @@ import logging
 from datetime import date
 from typing import Literal
 
+_DATE_FIELDS = (
+    "depart_date",
+    "return_date",
+    "check_in",
+    "check_out",
+    "window_start",
+    "window_end",
+)
+
 from anthropic import AsyncAnthropic
 from pydantic import BaseModel, ValidationError
 
@@ -34,6 +43,8 @@ class ParsedWatch(BaseModel):
 
 
 SYSTEM_PROMPT = """Você é o parser de pedidos de monitoramento de viagens. O usuário escreve em português livre e você extrai os parâmetros estruturados em JSON.
+
+HOJE É {today}. Todas as datas que você retornar devem estar NO FUTURO em relação a essa data — se o usuário mencionar mês/dia sem ano, use o próximo equivalente a partir de hoje (ex: se hoje é 16/05/2026 e o usuário diz "15/06", retorne 2026-06-15; se ele diz "março", retorne 2027-03-...). NUNCA retorne uma data anterior a hoje.
 
 Regras:
 - Identifique se é PASSAGEM (kind="flight") ou HOTEL (kind="hotel"). Se não der pra inferir, use kind="unclear" e preencha clarification_needed com UMA pergunta curta em português pedindo o que falta.
@@ -125,10 +136,35 @@ async def parse_watch(client: AsyncAnthropic, settings: Settings, text: str) -> 
         )
 
     try:
-        return ParsedWatch.model_validate(data)
+        parsed = ParsedWatch.model_validate(data)
     except ValidationError:
         logger.warning("parser returned invalid schema: %s", data)
         return ParsedWatch(
             kind="unclear",
             clarification_needed="Não consegui interpretar. Pode dar mais detalhes (origem, destino, datas)?",
         )
+
+    return _bump_past_dates(parsed)
+
+
+def _bump_past_dates(p: ParsedWatch) -> ParsedWatch:
+    today = date.today()
+    for field in _DATE_FIELDS:
+        value = getattr(p, field)
+        if not value:
+            continue
+        try:
+            d = date.fromisoformat(value)
+        except ValueError:
+            continue
+        bumped = False
+        while d < today:
+            try:
+                d = d.replace(year=d.year + 1)
+            except ValueError:
+                d = d.replace(year=d.year + 1, day=28)
+            bumped = True
+        if bumped:
+            logger.info("bumped past date %s=%s → %s", field, value, d.isoformat())
+            setattr(p, field, d.isoformat())
+    return p
