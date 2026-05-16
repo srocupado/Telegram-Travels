@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Float, ForeignKey, String, func
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.db.base import Base
@@ -36,6 +36,7 @@ class Watch(Base):
     last_alert_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     min_price_seen: Mapped[float | None] = mapped_column(Float)
     snooze_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    high_streak: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

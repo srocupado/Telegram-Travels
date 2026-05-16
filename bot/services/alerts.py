@@ -12,7 +12,12 @@ from bot.db.models import Watch
 logger = logging.getLogger(__name__)
 
 
-def should_alert(watch: Watch, new_price: float, cooldown_hours: int) -> tuple[bool, str]:
+def should_alert(
+    watch: Watch,
+    new_price: float,
+    cooldown_hours: int,
+    price_insights: dict | None = None,
+) -> tuple[bool, str]:
     now = datetime.now(timezone.utc)
     if watch.snooze_until and watch.snooze_until > now:
         return False, "snoozed"
@@ -21,10 +26,20 @@ def should_alert(watch: Watch, new_price: float, cooldown_hours: int) -> tuple[b
             return False, "cooldown"
     if watch.max_price is not None and new_price <= watch.max_price:
         return True, "below_max"
+
+    level = (price_insights or {}).get("price_level")
+
     if watch.min_price_seen is None:
-        return True, "first_check"
+        if level == "low":
+            return True, "first_low"
+        if level is None:
+            return True, "first_check"
+        return False, "first_not_low"
+
     if new_price <= watch.min_price_seen * 0.9:
         return True, "new_low"
+    if level == "low" and new_price < watch.min_price_seen:
+        return True, "insights_low"
     return False, "no_trigger"
 
 

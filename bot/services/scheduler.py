@@ -17,6 +17,7 @@ from bot.services.serpapi_client import (
     SerpAPIError,
     extract_best_flight,
     extract_best_hotel,
+    extract_price_insights,
     find_best_flight_in_window,
     find_best_hotel_in_window,
     format_flight,
@@ -24,6 +25,8 @@ from bot.services.serpapi_client import (
 )
 
 FLEX_FLIGHT_WEEKDAYS = (1, 3)
+HIGH_STREAK_BACKOFF_THRESHOLD = 2
+HIGH_STREAK_BACKOFF_DAYS = 7
 
 
 def _is_due(watch: Watch, now_utc: datetime, default_hours: int) -> bool:
@@ -32,6 +35,8 @@ def _is_due(watch: Watch, now_utc: datetime, default_hours: int) -> bool:
             return False
         if watch.last_checked_at is None:
             return True
+        if (watch.high_streak or 0) >= HIGH_STREAK_BACKOFF_THRESHOLD:
+            return now_utc - watch.last_checked_at >= timedelta(days=HIGH_STREAK_BACKOFF_DAYS)
         return watch.last_checked_at.date() < now_utc.date()
     if watch.last_checked_at is None:
         return True
@@ -52,6 +57,7 @@ async def check_watch(
     chosen_co: str | None = None
     chosen_dep: str | None = None
     chosen_ret: str | None = None
+    insights: dict | None = None
     try:
         if watch.kind == "flight":
             if watch.params.get("window_start") and watch.params.get("nights"):
@@ -71,7 +77,7 @@ async def check_watch(
                     currency=watch.currency,
                 )
                 if flex is not None:
-                    price, payload, chosen_dep, chosen_ret, _ = flex
+                    price, payload, chosen_dep, chosen_ret, _, insights = flex
                     best = (price, payload)
                 else:
                     best = None
@@ -88,6 +94,7 @@ async def check_watch(
                     currency=watch.currency,
                 )
                 best = extract_best_flight(raw)
+                insights = extract_price_insights(raw)
         elif watch.kind == "hotel":
             if watch.params.get("nights") and watch.params.get("window_start"):
                 flex = await find_best_hotel_in_window(
@@ -137,15 +144,18 @@ async def check_watch(
     session.add(snapshot)
     await session.flush()
 
-    fire, reason = should_alert(watch, price, settings.alert_cooldown_hours)
+    fire, reason = should_alert(watch, price, settings.alert_cooldown_hours, insights)
     watch.last_price = price
     if watch.min_price_seen is None or price < watch.min_price_seen:
         watch.min_price_seen = price
 
+    level = (insights or {}).get("price_level") if isinstance(insights, dict) else None
+    watch.high_streak = (watch.high_streak or 0) + 1 if level == "high" else 0
+
     if fire:
         headline = await compose_alert_message(claude, settings, watch, price, reason)
         details = (
-            format_flight(price, payload, chosen_dep, chosen_ret)
+            format_flight(price, payload, chosen_dep, chosen_ret, insights)
             if watch.kind == "flight"
             else format_hotel(price, payload, chosen_ci, chosen_co)
         )

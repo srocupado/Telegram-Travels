@@ -15,6 +15,7 @@ from bot.services.serpapi_client import (
     SerpAPIError,
     extract_best_flight,
     extract_best_hotel,
+    extract_price_insights,
     find_best_flight_in_window,
     find_best_hotel_in_window,
     format_flight,
@@ -55,6 +56,7 @@ async def cmd_search(
     chosen_co: str | None = None
     chosen_dep: str | None = None
     chosen_ret: str | None = None
+    insights: dict | None = None
     try:
         if parsed.kind == "flight" and parsed.nights and parsed.window_start and parsed.window_end:
             dests = parsed.destination_iatas or (
@@ -71,7 +73,7 @@ async def cmd_search(
                 currency=parsed.currency,
             )
             if flex is not None:
-                price, payload, chosen_dep, chosen_ret, _ = flex
+                price, payload, chosen_dep, chosen_ret, _, insights = flex
                 best = (price, payload)
             else:
                 best = None
@@ -86,6 +88,7 @@ async def cmd_search(
                 currency=parsed.currency,
             )
             best = extract_best_flight(raw)
+            insights = extract_price_insights(raw)
         elif parsed.nights and parsed.window_start and parsed.window_end:
             flex = await find_best_hotel_in_window(
                 serpapi,
@@ -121,7 +124,7 @@ async def cmd_search(
     price, payload = best
     header = f"<b>{parsed.summary}</b>"
     if parsed.kind == "flight":
-        body = format_flight(price, payload, chosen_dep, chosen_ret)
+        body = format_flight(price, payload, chosen_dep, chosen_ret, insights)
     else:
         body = format_hotel(price, payload, chosen_ci, chosen_co)
     await message.answer(f"{header}\n\n{body}", disable_web_page_preview=True)

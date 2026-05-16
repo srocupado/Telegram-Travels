@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import Any
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -24,17 +25,25 @@ from bot.services.serpapi_client import SerpAPIClient
 logger = logging.getLogger(__name__)
 
 
-async def _migrate_users_authorization(engine: AsyncEngine) -> None:
+async def _column_exists(conn: Any, table: str, column: str) -> bool:
+    result = await conn.exec_driver_sql(f"PRAGMA table_info({table})")
+    return column in [row[1] for row in result.fetchall()]
+
+
+async def _migrate(engine: AsyncEngine) -> None:
     async with engine.begin() as conn:
-        result = await conn.exec_driver_sql("PRAGMA table_info(users)")
-        cols = [row[1] for row in result.fetchall()]
-        if "is_authorized" in cols:
-            return
-        await conn.exec_driver_sql(
-            "ALTER TABLE users ADD COLUMN is_authorized BOOLEAN NOT NULL DEFAULT 0"
-        )
-        await conn.execute(text("UPDATE users SET is_authorized = 1"))
-        logger.info("migrated users table: added is_authorized; grandfathered existing users")
+        if not await _column_exists(conn, "users", "is_authorized"):
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN is_authorized BOOLEAN NOT NULL DEFAULT 0"
+            )
+            await conn.execute(text("UPDATE users SET is_authorized = 1"))
+            logger.info("migrated users.is_authorized; grandfathered existing users")
+
+        if not await _column_exists(conn, "watches", "high_streak"):
+            await conn.exec_driver_sql(
+                "ALTER TABLE watches ADD COLUMN high_streak INTEGER NOT NULL DEFAULT 0"
+            )
+            logger.info("migrated watches.high_streak")
 
 
 async def main() -> None:
@@ -44,7 +53,7 @@ async def main() -> None:
     engine = make_engine(settings)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    await _migrate_users_authorization(engine)
+    await _migrate(engine)
 
     sessionmaker = make_sessionmaker(engine)
     claude = make_claude(settings)

@@ -119,6 +119,11 @@ async def find_best_hotel_in_window(
     return best
 
 
+def extract_price_insights(raw: dict[str, Any]) -> dict[str, Any] | None:
+    pi = raw.get("price_insights")
+    return pi if isinstance(pi, dict) else None
+
+
 async def find_best_flight_in_window(
     serpapi: "SerpAPIClient",
     origin_iata: str,
@@ -129,7 +134,7 @@ async def find_best_flight_in_window(
     adults: int = 1,
     currency: str = "BRL",
     max_samples: int = MAX_FLIGHT_FLEX_SAMPLES,
-) -> tuple[float, dict[str, Any], str, str, str] | None:
+) -> tuple[float, dict[str, Any], str, str, str, dict[str, Any] | None] | None:
     try:
         start = date.fromisoformat(window_start)
         end = date.fromisoformat(window_end)
@@ -142,7 +147,7 @@ async def find_best_flight_in_window(
     n = min(span, max_samples)
     offsets = [0] if n == 1 else [int(i * (span - 1) / (n - 1)) for i in range(n)]
 
-    best: tuple[float, dict[str, Any], str, str, str] | None = None
+    best: tuple[float, dict[str, Any], str, str, str, dict[str, Any] | None] | None = None
     for off in offsets:
         depart = (start + timedelta(days=off)).isoformat()
         ret = (start + timedelta(days=off + stay_nights)).isoformat()
@@ -162,7 +167,7 @@ async def find_best_flight_in_window(
                 continue
             price, payload = leg
             if best is None or price < best[0]:
-                best = (price, payload, depart, ret, dest)
+                best = (price, payload, depart, ret, dest, extract_price_insights(raw))
     return best
 
 
@@ -217,13 +222,33 @@ def _fmt_time(s: Any) -> str:
     return parts[1] if len(parts) > 1 else s
 
 
+_PRICE_LEVEL_LABEL = {
+    "low": "🟢 Preço baixo",
+    "typical": "🟡 Preço normal",
+    "high": "🔴 Preço alto",
+}
+
+
 def format_flight(
     price: float,
     payload: dict[str, Any],
     chosen_depart: str | None = None,
     chosen_return: str | None = None,
+    price_insights: dict[str, Any] | None = None,
 ) -> str:
     lines: list[str] = [f"💰 <b>R$ {price:.2f}</b>"]
+    if price_insights:
+        level = price_insights.get("price_level")
+        label = _PRICE_LEVEL_LABEL.get(level) if isinstance(level, str) else None
+        typical = price_insights.get("typical_price_range")
+        if label:
+            extra = ""
+            if isinstance(typical, list) and len(typical) == 2:
+                try:
+                    extra = f" (faixa típica R$ {float(typical[0]):.0f}–{float(typical[1]):.0f})"
+                except (TypeError, ValueError):
+                    extra = ""
+            lines.append(f"{label}{extra}")
     if chosen_depart:
         try:
             d1 = date.fromisoformat(chosen_depart)
