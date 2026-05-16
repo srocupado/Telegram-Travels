@@ -230,6 +230,17 @@ def extract_best_hotel(raw: dict[str, Any]) -> tuple[float, dict[str, Any]] | No
     candidates.extend(raw.get("properties") or [])
     candidates.extend(raw.get("ads") or [])
     candidates.extend(raw.get("featured_results") or [])
+
+    # Single-property responses (when q is a specific hotel name) have the
+    # property fields at the root of the response, not wrapped in an array.
+    if not candidates and (
+        "rate_per_night" in raw
+        or "total_rate" in raw
+        or "prices" in raw
+        or "featured_prices" in raw
+    ):
+        candidates.append(raw)
+
     if not candidates:
         logger.warning(
             "hotel response had no candidates: top-level keys=%s",
