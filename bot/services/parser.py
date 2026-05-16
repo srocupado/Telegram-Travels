@@ -85,30 +85,35 @@ def _system_prompt() -> str:
     return SYSTEM_PROMPT.format(today=date.today().isoformat())
 
 
-async def parse_watch(client: AsyncAnthropic, settings: Settings, text: str) -> ParsedWatch:
-    try:
-        response = await client.messages.create(
-            model=settings.haiku_model,
-            max_tokens=1024,
-            system=_system_prompt(),
-            messages=[{"role": "user", "content": text}],
-            output_config={
-                "format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}
-            },
-        )
-    except TypeError:
-        response = await client.messages.create(
-            model=settings.haiku_model,
-            max_tokens=1024,
-            system=_system_prompt() + "\nResponda apenas com JSON válido seguindo o schema combinado.",
-            messages=[{"role": "user", "content": text}],
-        )
+JSON_INSTRUCTION = (
+    "\n\nResponda APENAS com um objeto JSON válido seguindo este schema, "
+    "sem texto antes ou depois, sem ```json:\n"
+    + json.dumps(OUTPUT_SCHEMA, ensure_ascii=False, indent=2)
+)
 
-    raw_text = next((b.text for b in response.content if b.type == "text"), "").strip()
-    if raw_text.startswith("```"):
-        raw_text = raw_text.strip("`")
-        if raw_text.lower().startswith("json"):
-            raw_text = raw_text[4:].strip()
+
+def _strip_code_fence(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.lstrip("`").lstrip()
+        if text.lower().startswith("json"):
+            text = text[4:].lstrip()
+        if text.endswith("```"):
+            text = text[:-3].rstrip()
+    return text.strip()
+
+
+async def parse_watch(client: AsyncAnthropic, settings: Settings, text: str) -> ParsedWatch:
+    fast_client = client.with_options(timeout=30.0, max_retries=1)
+    response = await fast_client.messages.create(
+        model=settings.haiku_model,
+        max_tokens=1024,
+        system=_system_prompt() + JSON_INSTRUCTION,
+        messages=[{"role": "user", "content": text}],
+    )
+
+    raw_text = next((b.text for b in response.content if b.type == "text"), "")
+    raw_text = _strip_code_fence(raw_text)
 
     try:
         data = json.loads(raw_text)

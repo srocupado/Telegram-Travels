@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+import anthropic
 from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
@@ -66,6 +67,23 @@ async def cmd_search(
     try:
         try:
             parsed = await parse_watch(claude, settings, command.args)
+        except anthropic.APITimeoutError:
+            await message.answer("⏱️ A IA demorou demais. Tenta de novo daqui a pouco.")
+            return
+        except anthropic.RateLimitError:
+            await message.answer("🚦 Limite de uso da IA. Espera alguns minutos.")
+            return
+        except anthropic.APIConnectionError:
+            await message.answer("🌐 Sem conexão com a IA. Tenta de novo.")
+            return
+        except anthropic.APIStatusError as e:
+            msg = (
+                "🛠️ A IA está instável agora. Tenta de novo daqui a pouco."
+                if e.status_code >= 500
+                else "Não consegui interpretar seu pedido. Tente reformular."
+            )
+            await message.answer(msg)
+            return
         except Exception:
             logger.exception("parse failed")
             await message.answer("Não consegui interpretar seu pedido. Tente reformular.")

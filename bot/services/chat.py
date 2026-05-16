@@ -108,7 +108,7 @@ async def chat_turn(
     session.messages = session.messages[-MAX_TURNS * 2 :]
     session.touch()
 
-    response = await client.messages.create(
+    response = await client.with_options(timeout=30.0, max_retries=1).messages.create(
         model=settings.haiku_model,
         max_tokens=600,
         system=_system_prompt(),
