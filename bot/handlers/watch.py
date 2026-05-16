@@ -19,13 +19,20 @@ router = Router(name="watch")
 
 def _params_from_parsed(p: ParsedWatch) -> dict:
     if p.kind == "flight":
-        return {
+        dests = p.destination_iatas or ([p.destination_iata] if p.destination_iata else [])
+        flight_params: dict = {
             "origin_iata": p.origin_iata,
-            "destination_iata": p.destination_iata,
-            "depart_date": p.depart_date,
-            "return_date": p.return_date,
+            "destination_iatas": dests,
             "adults": p.adults,
         }
+        if p.nights and p.window_start and p.window_end:
+            flight_params["window_start"] = p.window_start
+            flight_params["window_end"] = p.window_end
+            flight_params["nights"] = p.nights
+        else:
+            flight_params["depart_date"] = p.depart_date
+            flight_params["return_date"] = p.return_date
+        return flight_params
     params: dict = {"location": p.location, "adults": p.adults}
     if p.nights and p.window_start and p.window_end:
         params["window_start"] = p.window_start

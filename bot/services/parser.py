@@ -17,6 +17,7 @@ class ParsedWatch(BaseModel):
     kind: Literal["flight", "hotel", "unclear"]
     origin_iata: str | None = None
     destination_iata: str | None = None
+    destination_iatas: list[str] | None = None
     location: str | None = None
     depart_date: str | None = None
     return_date: str | None = None
@@ -37,7 +38,10 @@ SYSTEM_PROMPT = """Você é o parser de pedidos de monitoramento de viagens. O u
 Regras:
 - Identifique se é PASSAGEM (kind="flight") ou HOTEL (kind="hotel"). Se não der pra inferir, use kind="unclear" e preencha clarification_needed com UMA pergunta curta em português pedindo o que falta.
 - Para passagens: origin_iata e destination_iata são códigos IATA de 3 letras (ex: GRU, GIG, BSB, EZE, JFK, LIS). Se a cidade tiver vários aeroportos, escolha o principal (São Paulo → GRU, Rio → GIG, Buenos Aires → EZE).
-- Datas no formato YYYY-MM-DD. Hoje é {today}. Se o usuário disser "julho" sem ano, assuma o próximo julho a partir de hoje. Se só uma data, é one-way (return_date null).
+- Se o usuário citar MAIS DE UM aeroporto de destino (ex: "Haneda ou Narita") ou um país/região sem especificar aeroporto (ex: "Japão"), preencha destination_iatas com a lista (ex: ["NRT","HND"]) e deixe destination_iata nulo. Para "Japão" use ["NRT","HND"]; para "EUA" peça clarificação.
+- Modos de data pra passagem:
+  (a) DATAS FIXAS: preencha depart_date (obrigatório) e return_date (opcional, null se one-way).
+  (b) JANELA FLEXÍVEL: preencha window_start, window_end e nights (duração da estadia em dias). Use quando o usuário disser "ficando N dias" / "N dias de viagem" dentro de um intervalo (ex: "entre 9/9 e 30/11, ficando 20 dias"). Não preencha depart_date/return_date nesse caso.
 - Para hotéis: location é texto livre (ex: "Buenos Aires", "Centro de Lisboa"). Existem dois modos:
   (a) datas fixas: preencha check_in e check_out (datas exatas). Use quando o usuário definir início e fim da estadia.
   (b) janela flexível: preencha window_start, window_end e nights (número de noites a procurar dentro da janela). Use quando o usuário disser algo como "2 noites entre 8 e 12 de julho", "qualquer 3 diárias na primeira semana de agosto", "uma diária entre dia 5 e 10". Não preencha check_in/check_out nesse caso.
@@ -57,6 +61,7 @@ OUTPUT_SCHEMA = {
         "kind": {"type": "string", "enum": ["flight", "hotel", "unclear"]},
         "origin_iata": {"type": ["string", "null"]},
         "destination_iata": {"type": ["string", "null"]},
+        "destination_iatas": {"type": ["array", "null"], "items": {"type": "string"}},
         "location": {"type": ["string", "null"]},
         "depart_date": {"type": ["string", "null"]},
         "return_date": {"type": ["string", "null"]},

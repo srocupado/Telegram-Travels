@@ -15,6 +15,7 @@ from bot.services.serpapi_client import (
     SerpAPIError,
     extract_best_flight,
     extract_best_hotel,
+    find_best_flight_in_window,
     find_best_hotel_in_window,
     format_flight,
     format_hotel,
@@ -52,11 +53,33 @@ async def cmd_search(
 
     chosen_ci: str | None = None
     chosen_co: str | None = None
+    chosen_dep: str | None = None
+    chosen_ret: str | None = None
     try:
-        if parsed.kind == "flight":
+        if parsed.kind == "flight" and parsed.nights and parsed.window_start and parsed.window_end:
+            dests = parsed.destination_iatas or (
+                [parsed.destination_iata] if parsed.destination_iata else []
+            )
+            flex = await find_best_flight_in_window(
+                serpapi,
+                parsed.origin_iata or "",
+                dests,
+                parsed.window_start,
+                parsed.window_end,
+                parsed.nights,
+                adults=parsed.adults,
+                currency=parsed.currency,
+            )
+            if flex is not None:
+                price, payload, chosen_dep, chosen_ret, _ = flex
+                best = (price, payload)
+            else:
+                best = None
+        elif parsed.kind == "flight":
             raw = await serpapi.search_flights(
                 origin_iata=parsed.origin_iata or "",
-                destination_iata=parsed.destination_iata or "",
+                destination_iata=parsed.destination_iata
+                or (parsed.destination_iatas[0] if parsed.destination_iatas else ""),
                 depart_date=parsed.depart_date or "",
                 return_date=parsed.return_date,
                 adults=parsed.adults,
@@ -98,7 +121,7 @@ async def cmd_search(
     price, payload = best
     header = f"<b>{parsed.summary}</b>"
     if parsed.kind == "flight":
-        body = format_flight(price, payload)
+        body = format_flight(price, payload, chosen_dep, chosen_ret)
     else:
         body = format_hotel(price, payload, chosen_ci, chosen_co)
     await message.answer(f"{header}\n\n{body}", disable_web_page_preview=True)

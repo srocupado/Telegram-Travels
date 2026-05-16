@@ -17,10 +17,19 @@ from bot.services.serpapi_client import (
     SerpAPIError,
     extract_best_flight,
     extract_best_hotel,
+    find_best_flight_in_window,
     find_best_hotel_in_window,
     format_flight,
     format_hotel,
 )
+
+FLEX_FLIGHT_INTERVAL_HOURS = 72
+
+
+def _interval_hours(watch: Watch, default_hours: int) -> int:
+    if watch.kind == "flight" and watch.params.get("window_start"):
+        return FLEX_FLIGHT_INTERVAL_HOURS
+    return default_hours
 
 logger = logging.getLogger(__name__)
 
@@ -35,17 +44,44 @@ async def check_watch(
 ) -> None:
     chosen_ci: str | None = None
     chosen_co: str | None = None
+    chosen_dep: str | None = None
+    chosen_ret: str | None = None
     try:
         if watch.kind == "flight":
-            raw = await serpapi.search_flights(
-                origin_iata=watch.params["origin_iata"],
-                destination_iata=watch.params["destination_iata"],
-                depart_date=watch.params["depart_date"],
-                return_date=watch.params.get("return_date"),
-                adults=watch.params.get("adults", 1),
-                currency=watch.currency,
-            )
-            best = extract_best_flight(raw)
+            if watch.params.get("window_start") and watch.params.get("nights"):
+                dests = watch.params.get("destination_iatas") or (
+                    [watch.params["destination_iata"]]
+                    if watch.params.get("destination_iata")
+                    else []
+                )
+                flex = await find_best_flight_in_window(
+                    serpapi,
+                    watch.params["origin_iata"],
+                    dests,
+                    watch.params["window_start"],
+                    watch.params["window_end"],
+                    int(watch.params["nights"]),
+                    adults=watch.params.get("adults", 1),
+                    currency=watch.currency,
+                )
+                if flex is not None:
+                    price, payload, chosen_dep, chosen_ret, _ = flex
+                    best = (price, payload)
+                else:
+                    best = None
+            else:
+                single_dest = watch.params.get("destination_iata") or (
+                    (watch.params.get("destination_iatas") or [""])[0]
+                )
+                raw = await serpapi.search_flights(
+                    origin_iata=watch.params["origin_iata"],
+                    destination_iata=single_dest,
+                    depart_date=watch.params["depart_date"],
+                    return_date=watch.params.get("return_date"),
+                    adults=watch.params.get("adults", 1),
+                    currency=watch.currency,
+                )
+                best = extract_best_flight(raw)
         elif watch.kind == "hotel":
             if watch.params.get("nights") and watch.params.get("window_start"):
                 flex = await find_best_hotel_in_window(
@@ -103,7 +139,7 @@ async def check_watch(
     if fire:
         headline = await compose_alert_message(claude, settings, watch, price, reason)
         details = (
-            format_flight(price, payload)
+            format_flight(price, payload, chosen_dep, chosen_ret)
             if watch.kind == "flight"
             else format_hotel(price, payload, chosen_ci, chosen_co)
         )
@@ -136,15 +172,19 @@ async def tick(
     bot: Bot,
     settings: Settings,
 ) -> None:
-    threshold = datetime.now(timezone.utc) - timedelta(hours=settings.watch_check_interval_hours)
+    now_utc = datetime.now(timezone.utc)
     async with sessionmaker() as session:
-        stmt = select(Watch).where(
-            Watch.status == "active",
-            (Watch.last_checked_at.is_(None)) | (Watch.last_checked_at < threshold),
-        )
-        watches = list((await session.scalars(stmt)).all())
-    logger.info("scheduler tick: %d watch(es) due", len(watches))
-    for w in watches:
+        stmt = select(Watch).where(Watch.status == "active")
+        all_active = list((await session.scalars(stmt)).all())
+
+    due: list[Watch] = []
+    for w in all_active:
+        interval = _interval_hours(w, settings.watch_check_interval_hours)
+        if w.last_checked_at is None or now_utc - w.last_checked_at >= timedelta(hours=interval):
+            due.append(w)
+
+    logger.info("scheduler tick: %d watch(es) due (of %d active)", len(due), len(all_active))
+    for w in due:
         async with sessionmaker() as session:
             fresh = await session.get(Watch, w.id)
             if fresh is None or fresh.status != "active":

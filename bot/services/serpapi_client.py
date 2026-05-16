@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://serpapi.com/search.json"
 MAX_FLEX_ITERATIONS = 14
+MAX_FLIGHT_FLEX_SAMPLES = 5
 
 
 class SerpAPIError(Exception):
@@ -118,6 +119,53 @@ async def find_best_hotel_in_window(
     return best
 
 
+async def find_best_flight_in_window(
+    serpapi: "SerpAPIClient",
+    origin_iata: str,
+    destination_iatas: list[str],
+    window_start: str,
+    window_end: str,
+    stay_nights: int,
+    adults: int = 1,
+    currency: str = "BRL",
+    max_samples: int = MAX_FLIGHT_FLEX_SAMPLES,
+) -> tuple[float, dict[str, Any], str, str, str] | None:
+    try:
+        start = date.fromisoformat(window_start)
+        end = date.fromisoformat(window_end)
+    except ValueError:
+        return None
+    last_depart = end - timedelta(days=stay_nights)
+    if last_depart < start or stay_nights <= 0 or not destination_iatas:
+        return None
+    span = (last_depart - start).days + 1
+    n = min(span, max_samples)
+    offsets = [0] if n == 1 else [int(i * (span - 1) / (n - 1)) for i in range(n)]
+
+    best: tuple[float, dict[str, Any], str, str, str] | None = None
+    for off in offsets:
+        depart = (start + timedelta(days=off)).isoformat()
+        ret = (start + timedelta(days=off + stay_nights)).isoformat()
+        for dest in destination_iatas:
+            try:
+                raw = await serpapi.search_flights(
+                    origin_iata, dest, depart, ret, adults, currency
+                )
+            except SerpAPIError as e:
+                logger.warning(
+                    "flex flight leg %s→%s %s/%s failed: %s",
+                    origin_iata, dest, depart, ret, e,
+                )
+                continue
+            leg = extract_best_flight(raw)
+            if leg is None:
+                continue
+            price, payload = leg
+            if best is None or price < best[0]:
+                best = (price, payload, depart, ret, dest)
+    return best
+
+
 def extract_best_flight(raw: dict[str, Any]) -> tuple[float, dict[str, Any]] | None:
     candidates: list[dict[str, Any]] = []
     candidates.extend(raw.get("best_flights") or [])
@@ -169,8 +217,23 @@ def _fmt_time(s: Any) -> str:
     return parts[1] if len(parts) > 1 else s
 
 
-def format_flight(price: float, payload: dict[str, Any]) -> str:
+def format_flight(
+    price: float,
+    payload: dict[str, Any],
+    chosen_depart: str | None = None,
+    chosen_return: str | None = None,
+) -> str:
     lines: list[str] = [f"💰 <b>R$ {price:.2f}</b>"]
+    if chosen_depart:
+        try:
+            d1 = date.fromisoformat(chosen_depart)
+            label = f"📅 Ida {d1.strftime('%d/%m')}"
+            if chosen_return:
+                d2 = date.fromisoformat(chosen_return)
+                label += f" → Volta {d2.strftime('%d/%m')} ({(d2 - d1).days} dias)"
+            lines.append(label)
+        except ValueError:
+            pass
 
     total_duration = payload.get("total_duration")
     if total_duration:
