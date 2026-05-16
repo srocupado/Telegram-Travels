@@ -22,6 +22,9 @@ class ParsedWatch(BaseModel):
     return_date: str | None = None
     check_in: str | None = None
     check_out: str | None = None
+    window_start: str | None = None
+    window_end: str | None = None
+    nights: int | None = None
     adults: int = 1
     max_price_brl: float | None = None
     currency: str = "BRL"
@@ -35,7 +38,10 @@ Regras:
 - Identifique se é PASSAGEM (kind="flight") ou HOTEL (kind="hotel"). Se não der pra inferir, use kind="unclear" e preencha clarification_needed com UMA pergunta curta em português pedindo o que falta.
 - Para passagens: origin_iata e destination_iata são códigos IATA de 3 letras (ex: GRU, GIG, BSB, EZE, JFK, LIS). Se a cidade tiver vários aeroportos, escolha o principal (São Paulo → GRU, Rio → GIG, Buenos Aires → EZE).
 - Datas no formato YYYY-MM-DD. Hoje é {today}. Se o usuário disser "julho" sem ano, assuma o próximo julho a partir de hoje. Se só uma data, é one-way (return_date null).
-- Para hotéis: location é texto livre (ex: "Buenos Aires", "Centro de Lisboa"). check_in e check_out obrigatórios.
+- Para hotéis: location é texto livre (ex: "Buenos Aires", "Centro de Lisboa"). Existem dois modos:
+  (a) datas fixas: preencha check_in e check_out (datas exatas). Use quando o usuário definir início e fim da estadia.
+  (b) janela flexível: preencha window_start, window_end e nights (número de noites a procurar dentro da janela). Use quando o usuário disser algo como "2 noites entre 8 e 12 de julho", "qualquer 3 diárias na primeira semana de agosto", "uma diária entre dia 5 e 10". Não preencha check_in/check_out nesse caso.
+  Regra: se a duração explicitada (nights) é MENOR que o tamanho da janela (window_end - window_start), use modo (b). Se for IGUAL, use modo (a).
 - adults default 1 pra passagem, 2 pra hotel.
 - max_price_brl: se o usuário mencionar teto de preço (ex: "até R$ 2000", "até 1500 reais"), converta pra número. Sem teto → null.
 - currency sempre "BRL" salvo se o usuário pedir outra moeda.
@@ -56,6 +62,9 @@ OUTPUT_SCHEMA = {
         "return_date": {"type": ["string", "null"]},
         "check_in": {"type": ["string", "null"]},
         "check_out": {"type": ["string", "null"]},
+        "window_start": {"type": ["string", "null"]},
+        "window_end": {"type": ["string", "null"]},
+        "nights": {"type": ["integer", "null"]},
         "adults": {"type": "integer"},
         "max_price_brl": {"type": ["number", "null"]},
         "currency": {"type": "string"},

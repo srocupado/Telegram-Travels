@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import date, timedelta
 from typing import Any
 
 import httpx
@@ -10,6 +11,7 @@ from bot.config import Settings
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://serpapi.com/search.json"
+MAX_FLEX_ITERATIONS = 14
 
 
 class SerpAPIError(Exception):
@@ -77,6 +79,43 @@ class SerpAPIClient:
             "gl": "br",
         }
         return await self._get(params)
+
+
+async def find_best_hotel_in_window(
+    serpapi: "SerpAPIClient",
+    location: str,
+    window_start: str,
+    window_end: str,
+    nights: int,
+    adults: int = 2,
+    currency: str = "BRL",
+) -> tuple[float, dict[str, Any], str, str] | None:
+    try:
+        start = date.fromisoformat(window_start)
+        end = date.fromisoformat(window_end)
+    except ValueError:
+        return None
+    last_checkin = end - timedelta(days=nights)
+    if last_checkin < start or nights <= 0:
+        return None
+    span = (last_checkin - start).days + 1
+    iterations = min(span, MAX_FLEX_ITERATIONS)
+    best: tuple[float, dict[str, Any], str, str] | None = None
+    for i in range(iterations):
+        ci = (start + timedelta(days=i)).isoformat()
+        co = (start + timedelta(days=i + nights)).isoformat()
+        try:
+            raw = await serpapi.search_hotels(location, ci, co, adults, currency)
+        except SerpAPIError as e:
+            logger.warning("flex hotel leg %s→%s failed: %s", ci, co, e)
+            continue
+        leg = extract_best_hotel(raw)
+        if leg is None:
+            continue
+        price, payload = leg
+        if best is None or price < best[0]:
+            best = (price, payload, ci, co)
+    return best
 
 
 def extract_best_flight(raw: dict[str, Any]) -> tuple[float, dict[str, Any]] | None:
@@ -194,7 +233,12 @@ def format_flight(price: float, payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_hotel(price: float, payload: dict[str, Any]) -> str:
+def format_hotel(
+    price: float,
+    payload: dict[str, Any],
+    chosen_check_in: str | None = None,
+    chosen_check_out: str | None = None,
+) -> str:
     name = payload.get("name") or "Hotel"
     hotel_class = payload.get("hotel_class") or ""
     rating = payload.get("overall_rating")
@@ -207,6 +251,16 @@ def format_hotel(price: float, payload: dict[str, Any]) -> str:
     link = payload.get("link")
 
     lines: list[str] = [f"💰 <b>R$ {price:.2f}</b> / diária"]
+    if chosen_check_in and chosen_check_out:
+        try:
+            ci = date.fromisoformat(chosen_check_in)
+            co = date.fromisoformat(chosen_check_out)
+            nights = (co - ci).days
+            lines.append(
+                f"📅 {ci.strftime('%d/%m')} → {co.strftime('%d/%m')} ({nights} noite{'s' if nights != 1 else ''})"
+            )
+        except ValueError:
+            lines.append(f"📅 {chosen_check_in} → {chosen_check_out}")
     lines.append(f"🏨 <b>{name}</b>")
     if hotel_class:
         lines.append(f"  {hotel_class}")

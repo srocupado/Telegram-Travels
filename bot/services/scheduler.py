@@ -17,6 +17,7 @@ from bot.services.serpapi_client import (
     SerpAPIError,
     extract_best_flight,
     extract_best_hotel,
+    find_best_hotel_in_window,
     format_flight,
     format_hotel,
 )
@@ -32,6 +33,8 @@ async def check_watch(
     settings: Settings,
     watch: Watch,
 ) -> None:
+    chosen_ci: str | None = None
+    chosen_co: str | None = None
     try:
         if watch.kind == "flight":
             raw = await serpapi.search_flights(
@@ -44,14 +47,30 @@ async def check_watch(
             )
             best = extract_best_flight(raw)
         elif watch.kind == "hotel":
-            raw = await serpapi.search_hotels(
-                location=watch.params["location"],
-                check_in=watch.params["check_in"],
-                check_out=watch.params["check_out"],
-                adults=watch.params.get("adults", 2),
-                currency=watch.currency,
-            )
-            best = extract_best_hotel(raw)
+            if watch.params.get("nights") and watch.params.get("window_start"):
+                flex = await find_best_hotel_in_window(
+                    serpapi,
+                    watch.params["location"],
+                    watch.params["window_start"],
+                    watch.params["window_end"],
+                    int(watch.params["nights"]),
+                    adults=watch.params.get("adults", 2),
+                    currency=watch.currency,
+                )
+                if flex is not None:
+                    price, payload, chosen_ci, chosen_co = flex
+                    best = (price, payload)
+                else:
+                    best = None
+            else:
+                raw = await serpapi.search_hotels(
+                    location=watch.params["location"],
+                    check_in=watch.params["check_in"],
+                    check_out=watch.params["check_out"],
+                    adults=watch.params.get("adults", 2),
+                    currency=watch.currency,
+                )
+                best = extract_best_hotel(raw)
         else:
             logger.warning("unknown watch kind: %s", watch.kind)
             return
@@ -86,7 +105,7 @@ async def check_watch(
         details = (
             format_flight(price, payload)
             if watch.kind == "flight"
-            else format_hotel(price, payload)
+            else format_hotel(price, payload, chosen_ci, chosen_co)
         )
         message = f"{headline}\n\n{details}"
         user = await session.get(User, watch.user_id)

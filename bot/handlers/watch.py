@@ -26,12 +26,15 @@ def _params_from_parsed(p: ParsedWatch) -> dict:
             "return_date": p.return_date,
             "adults": p.adults,
         }
-    return {
-        "location": p.location,
-        "check_in": p.check_in,
-        "check_out": p.check_out,
-        "adults": p.adults,
-    }
+    params: dict = {"location": p.location, "adults": p.adults}
+    if p.nights and p.window_start and p.window_end:
+        params["window_start"] = p.window_start
+        params["window_end"] = p.window_end
+        params["nights"] = p.nights
+    else:
+        params["check_in"] = p.check_in
+        params["check_out"] = p.check_out
+    return params
 
 
 @router.message(F.text & ~F.text.startswith("/"))
