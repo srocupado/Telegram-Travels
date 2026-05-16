@@ -189,22 +189,64 @@ def extract_best_flight(raw: dict[str, Any]) -> tuple[float, dict[str, Any]] | N
     return float(best["price"]), best
 
 
-def extract_best_hotel(raw: dict[str, Any]) -> tuple[float, dict[str, Any]] | None:
-    properties = raw.get("properties") or []
-    priced: list[tuple[float, dict[str, Any]]] = []
-    for p in properties:
-        rate = p.get("rate_per_night") or p.get("total_rate")
-        if not isinstance(rate, dict):
+def _extract_rate(rate_obj: Any) -> float | None:
+    if not isinstance(rate_obj, dict):
+        return None
+    val = rate_obj.get("extracted_lowest") or rate_obj.get("lowest")
+    if isinstance(val, str):
+        try:
+            return float(
+                val.replace("R$", "")
+                .replace("$", "")
+                .replace(".", "")
+                .replace(",", ".")
+                .strip()
+            )
+        except ValueError:
+            return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    return None
+
+
+def _property_price(p: dict[str, Any]) -> float | None:
+    direct = _extract_rate(p.get("rate_per_night")) or _extract_rate(p.get("total_rate"))
+    if direct:
+        return direct
+    sources: list[Any] = []
+    sources.extend(p.get("featured_prices") or [])
+    sources.extend(p.get("prices") or [])
+    for source in sources:
+        if not isinstance(source, dict):
             continue
-        val = rate.get("extracted_lowest") or rate.get("lowest")
-        if isinstance(val, str):
-            try:
-                val = float(val.replace("R$", "").replace(".", "").replace(",", ".").strip())
-            except ValueError:
-                continue
-        if isinstance(val, (int, float)):
-            priced.append((float(val), p))
+        r = _extract_rate(source.get("rate_per_night")) or _extract_rate(source.get("total_rate"))
+        if r:
+            return r
+    return None
+
+
+def extract_best_hotel(raw: dict[str, Any]) -> tuple[float, dict[str, Any]] | None:
+    candidates: list[dict[str, Any]] = []
+    candidates.extend(raw.get("properties") or [])
+    candidates.extend(raw.get("ads") or [])
+    candidates.extend(raw.get("featured_results") or [])
+    if not candidates:
+        logger.warning(
+            "hotel response had no candidates: top-level keys=%s",
+            list(raw.keys()),
+        )
+        return None
+    priced: list[tuple[float, dict[str, Any]]] = []
+    for p in candidates:
+        price = _property_price(p)
+        if price is not None:
+            priced.append((price, p))
     if not priced:
+        logger.warning(
+            "hotel response had %d candidates but no extractable prices; sample keys=%s",
+            len(candidates),
+            list(candidates[0].keys()) if candidates else [],
+        )
         return None
     return min(priced, key=lambda t: t[0])
 
