@@ -36,6 +36,7 @@ class ParsedWatch(BaseModel):
     window_end: str | None = None
     nights: int | None = None
     adults: int = 1
+    travel_class: int = 1
     max_price_brl: float | None = None
     currency: str = "BRL"
     summary: str = ""
@@ -58,6 +59,7 @@ Regras:
   (b) janela flexível: preencha window_start, window_end e nights (número de noites a procurar dentro da janela). Use quando o usuário disser algo como "2 noites entre 8 e 12 de julho", "qualquer 3 diárias na primeira semana de agosto", "uma diária entre dia 5 e 10". Não preencha check_in/check_out nesse caso.
   Regra: se a duração explicitada (nights) é MENOR que o tamanho da janela (window_end - window_start), use modo (b). Se for IGUAL, use modo (a).
 - adults default 1 pra passagem, 2 pra hotel.
+- travel_class (só pra passagem): 1=econômica (default), 2=premium economy, 3=executiva/business, 4=primeira classe. Detecte expressões como "executiva", "business", "biz", "classe executiva" → 3; "premium economy", "econômica premium" → 2; "primeira classe", "first class" → 4. Caso contrário, 1.
 - max_price_brl: se o usuário mencionar teto de preço (ex: "até R$ 2000", "até 1500 reais"), converta pra número. Sem teto → null.
 - currency sempre "BRL" salvo se o usuário pedir outra moeda.
 - summary: frase curta (até 80 chars) descrevendo o monitoramento, ex: "GRU → EZE em 12/jul, até R$ 1800".
@@ -82,6 +84,7 @@ OUTPUT_SCHEMA = {
         "window_end": {"type": ["string", "null"]},
         "nights": {"type": ["integer", "null"]},
         "adults": {"type": "integer"},
+        "travel_class": {"type": "integer"},
         "max_price_brl": {"type": ["number", "null"]},
         "currency": {"type": "string"},
         "summary": {"type": "string"},

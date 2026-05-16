@@ -24,6 +24,7 @@ def _params_from_parsed(p: ParsedWatch) -> dict:
             "origin_iata": p.origin_iata,
             "destination_iatas": dests,
             "adults": p.adults,
+            "travel_class": p.travel_class,
         }
         if p.nights and p.window_start and p.window_end:
             flight_params["window_start"] = p.window_start

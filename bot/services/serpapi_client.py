@@ -46,6 +46,7 @@ class SerpAPIClient:
         return_date: str | None = None,
         adults: int = 1,
         currency: str = "BRL",
+        travel_class: int = 1,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {
             "engine": "google_flights",
@@ -60,6 +61,8 @@ class SerpAPIClient:
         }
         if return_date:
             params["return_date"] = return_date
+        if travel_class and travel_class != 1:
+            params["travel_class"] = travel_class
         return await self._get(params)
 
     async def search_hotels(
@@ -134,6 +137,7 @@ async def find_best_flight_in_window(
     stay_nights: int,
     adults: int = 1,
     currency: str = "BRL",
+    travel_class: int = 1,
     max_samples: int = MAX_FLIGHT_FLEX_SAMPLES,
 ) -> tuple[float, dict[str, Any], str, str, str, dict[str, Any] | None] | None:
     try:
@@ -155,7 +159,7 @@ async def find_best_flight_in_window(
         for dest in destination_iatas:
             try:
                 raw = await serpapi.search_flights(
-                    origin_iata, dest, depart, ret, adults, currency
+                    origin_iata, dest, depart, ret, adults, currency, travel_class
                 )
             except SerpAPIError as e:
                 logger.warning(

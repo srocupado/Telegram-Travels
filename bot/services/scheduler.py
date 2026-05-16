@@ -75,6 +75,7 @@ async def check_watch(
                     int(watch.params["nights"]),
                     adults=watch.params.get("adults", 1),
                     currency=watch.currency,
+                    travel_class=int(watch.params.get("travel_class", 1)),
                 )
                 if flex is not None:
                     price, payload, chosen_dep, chosen_ret, _, insights = flex
@@ -92,6 +93,7 @@ async def check_watch(
                     return_date=watch.params.get("return_date"),
                     adults=watch.params.get("adults", 1),
                     currency=watch.currency,
+                    travel_class=int(watch.params.get("travel_class", 1)),
                 )
                 best = extract_best_flight(raw)
                 insights = extract_price_insights(raw)

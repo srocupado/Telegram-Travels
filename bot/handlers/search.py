@@ -123,6 +123,7 @@ async def cmd_search(
                     parsed.nights,
                     adults=parsed.adults,
                     currency=parsed.currency,
+                    travel_class=parsed.travel_class,
                 )
                 if flex is not None:
                     price, payload, chosen_dep, chosen_ret, _, insights = flex
@@ -138,6 +139,7 @@ async def cmd_search(
                     return_date=parsed.return_date,
                     adults=parsed.adults,
                     currency=parsed.currency,
+                    travel_class=parsed.travel_class,
                 )
                 best = extract_best_flight(raw)
                 insights = extract_price_insights(raw)
