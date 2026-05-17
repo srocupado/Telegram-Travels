@@ -34,6 +34,9 @@ HELP = (
     "/resume &lt;id&gt; - retoma\n"
     "/delete &lt;id&gt; - apaga\n"
     "/snooze &lt;id&gt; &lt;horas&gt; - silencia alertas por N horas\n"
+    "/congress_on - resumo semanal de MPs do Congresso (segunda 07:00 BRT)\n"
+    "/congress_off - cancela o resumo semanal\n"
+    "/congress_now - consulta a agenda de MPs da semana agora\n"
 )
 
 
