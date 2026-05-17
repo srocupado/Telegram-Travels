@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
+import httpx
 from aiogram import Bot
 from bot.services.llm import LLMClient
 from sqlalchemy import select
@@ -12,6 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from bot.config import Settings
 from bot.db.models import Alert, PriceSnapshot, User, Watch
 from bot.services.alerts import compose_alert_message, should_alert
+from bot.services.congress import (
+    CongressScrapeError,
+    USER_AGENT as CONGRESS_USER_AGENT,
+    fetch_week_mps,
+    format_week_message,
+)
 from bot.services.serpapi_client import (
     SerpAPIClient,
     SerpAPIError,
@@ -27,6 +35,9 @@ from bot.services.serpapi_client import (
 FLEX_FLIGHT_WEEKDAYS = (1, 3)
 HIGH_STREAK_BACKOFF_THRESHOLD = 2
 HIGH_STREAK_BACKOFF_DAYS = 7
+
+BRT = ZoneInfo("America/Sao_Paulo")
+CONGRESS_HOUR = 7
 
 
 def _is_due(watch: Watch, now_utc: datetime, default_hours: int) -> bool:
@@ -197,6 +208,72 @@ async def check_watch(
     await session.commit()
 
 
+async def _send_html_with_fallback(bot: Bot, chat_id: int, text: str) -> bool:
+    try:
+        await bot.send_message(chat_id, text, disable_web_page_preview=True)
+        return True
+    except Exception:
+        logger.exception("HTML send failed; retrying as plain text for chat %d", chat_id)
+        try:
+            await bot.send_message(
+                chat_id, text, parse_mode=None, disable_web_page_preview=True
+            )
+            return True
+        except Exception:
+            logger.exception("failed to send message to chat %d", chat_id)
+            return False
+
+
+async def run_congress_digest(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    bot: Bot,
+    settings: Settings,
+) -> None:
+    if not settings.congress_digest_enabled:
+        return
+    now_brt = datetime.now(BRT)
+    if now_brt.weekday() != 0 or now_brt.hour < CONGRESS_HOUR:
+        return
+
+    monday_brt = datetime.combine(now_brt.date(), time(0, 0), tzinfo=BRT)
+    monday_start_utc = monday_brt.astimezone(timezone.utc)
+
+    async with sessionmaker() as session:
+        stmt = select(User).where(
+            User.congress_subscribed.is_(True),
+            (User.last_congress_digest_at.is_(None))
+            | (User.last_congress_digest_at < monday_start_utc),
+        )
+        users = list((await session.scalars(stmt)).all())
+
+    if not users:
+        return
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=30.0,
+            follow_redirects=True,
+            headers={"User-Agent": CONGRESS_USER_AGENT},
+        ) as client:
+            items = await fetch_week_mps(client, now_brt.date())
+    except CongressScrapeError:
+        logger.exception("congress scrape failed")
+        return
+
+    message = format_week_message(items, now_brt.date())
+    logger.info("congress digest: %d inscritos, %d MPs encontradas", len(users), len(items))
+
+    for u in users:
+        sent = await _send_html_with_fallback(bot, u.telegram_id, message)
+        if sent:
+            async with sessionmaker() as session:
+                fresh = await session.get(User, u.id)
+                if fresh is not None:
+                    fresh.last_congress_digest_at = datetime.now(timezone.utc)
+                    await session.commit()
+            logger.info("congress digest enviado a %d", u.telegram_id)
+
+
 async def tick(
     sessionmaker: async_sessionmaker[AsyncSession],
     serpapi: SerpAPIClient,
@@ -221,6 +298,11 @@ async def tick(
             if fresh is None or fresh.status != "active":
                 continue
             await check_watch(session, serpapi, llm, bot, settings, fresh)
+
+    try:
+        await run_congress_digest(sessionmaker, bot, settings)
+    except Exception:
+        logger.exception("congress digest crashed")
 
 
 async def run_scheduler(

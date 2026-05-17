@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     scheduler_tick_seconds: int = 3600
     watch_check_interval_hours: int = 24
     alert_cooldown_hours: int = 12
+    congress_digest_enabled: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",
