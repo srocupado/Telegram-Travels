@@ -45,6 +45,18 @@ async def _migrate(engine: AsyncEngine) -> None:
             )
             logger.info("migrated watches.high_streak")
 
+        if not await _column_exists(conn, "users", "congress_subscribed"):
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN congress_subscribed BOOLEAN NOT NULL DEFAULT 0"
+            )
+            logger.info("migrated users.congress_subscribed")
+
+        if not await _column_exists(conn, "users", "last_congress_digest_at"):
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN last_congress_digest_at DATETIME"
+            )
+            logger.info("migrated users.last_congress_digest_at")
+
 
 async def main() -> None:
     settings = Settings()
