@@ -40,7 +40,7 @@ async def _get_or_create_user(session: AsyncSession, message: Message) -> User |
     return user
 
 
-@router.message(Command("congress_on"))
+@router.message(Command("congresso_on"))
 async def cmd_congress_on(message: Message, session: AsyncSession) -> None:
     user = await _get_or_create_user(session, message)
     if user is None:
@@ -52,7 +52,7 @@ async def cmd_congress_on(message: Message, session: AsyncSession) -> None:
     )
 
 
-@router.message(Command("congress_off"))
+@router.message(Command("congresso_off"))
 async def cmd_congress_off(message: Message, session: AsyncSession) -> None:
     user = await _get_or_create_user(session, message)
     if user is None:
@@ -62,7 +62,7 @@ async def cmd_congress_off(message: Message, session: AsyncSession) -> None:
     await message.answer("🏛️ Resumo semanal de MPs cancelado.")
 
 
-@router.message(Command("congress_now"))
+@router.message(Command("congresso_now"))
 async def cmd_congress_now(message: Message) -> None:
     today = datetime.now(BRT).date()
     try:
@@ -73,7 +73,7 @@ async def cmd_congress_now(message: Message) -> None:
         ) as client:
             items = await fetch_week_mps(client, today)
     except CongressScrapeError:
-        logger.exception("congress_now scrape failed")
+        logger.exception("congresso_now scrape failed")
         await message.answer(
             "⚠️ Não consegui acessar a agenda do Congresso agora. "
             "Tenta de novo em alguns minutos."
@@ -84,5 +84,5 @@ async def cmd_congress_now(message: Message) -> None:
     try:
         await message.answer(text, disable_web_page_preview=True)
     except Exception:
-        logger.exception("HTML send failed in /congress_now")
+        logger.exception("HTML send failed in /congresso_now")
         await message.answer(text, parse_mode=None, disable_web_page_preview=True)

@@ -53,7 +53,12 @@ def _is_mp(text: str) -> bool:
 
 
 def _week_bounds(today: date) -> tuple[date, date]:
-    monday = today - timedelta(days=today.weekday())
+    # Seg-sex da semana "ativa": no fim de semana (sáb=5, dom=6), pula pra
+    # próxima segunda, pra não mostrar a agenda já encerrada.
+    if today.weekday() >= 5:
+        monday = today + timedelta(days=7 - today.weekday())
+    else:
+        monday = today - timedelta(days=today.weekday())
     friday = monday + timedelta(days=4)
     return monday, friday
 
