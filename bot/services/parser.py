@@ -14,10 +14,10 @@ _DATE_FIELDS = (
     "window_end",
 )
 
-from anthropic import AsyncAnthropic
 from pydantic import BaseModel, ValidationError
 
 from bot.config import Settings
+from bot.services.llm import LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -117,17 +117,16 @@ def _strip_code_fence(text: str) -> str:
     return text.strip()
 
 
-async def parse_watch(client: AsyncAnthropic, settings: Settings, text: str) -> ParsedWatch:
-    fast_client = client.with_options(timeout=30.0, max_retries=1)
-    response = await fast_client.messages.create(
-        model=settings.haiku_model,
-        max_tokens=1024,
+async def parse_watch(llm: LLMClient, settings: Settings, text: str) -> ParsedWatch:
+    result = await llm.complete(
+        speed="fast",
         system=_system_prompt() + JSON_INSTRUCTION,
         messages=[{"role": "user", "content": text}],
+        max_tokens=1024,
+        timeout=30.0,
+        max_retries=1,
     )
-
-    raw_text = next((b.text for b in response.content if b.type == "text"), "")
-    raw_text = _strip_code_fence(raw_text)
+    raw_text = _strip_code_fence(result.text)
 
     try:
         data = json.loads(raw_text)

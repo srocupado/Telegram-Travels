@@ -3,11 +3,11 @@ from typing import Any
 
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
-from anthropic import AsyncAnthropic
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot.config import Settings
 from bot.services.chat import ChatStore
+from bot.services.llm import LLMClient
 from bot.services.long_form_chat import LongFormStore
 from bot.services.serpapi_client import SerpAPIClient
 
@@ -17,14 +17,14 @@ class DepsMiddleware(BaseMiddleware):
         self,
         sessionmaker: async_sessionmaker[AsyncSession],
         settings: Settings,
-        claude: AsyncAnthropic,
+        llm: LLMClient,
         serpapi: SerpAPIClient,
         chat_store: ChatStore,
         long_form_store: LongFormStore,
     ) -> None:
         self._sessionmaker = sessionmaker
         self._settings = settings
-        self._claude = claude
+        self._llm = llm
         self._serpapi = serpapi
         self._chat_store = chat_store
         self._long_form_store = long_form_store
@@ -38,7 +38,7 @@ class DepsMiddleware(BaseMiddleware):
         async with self._sessionmaker() as session:
             data["session"] = session
             data["settings"] = self._settings
-            data["claude"] = self._claude
+            data["llm"] = self._llm
             data["serpapi"] = self._serpapi
             data["chat_store"] = self._chat_store
             data["long_form_store"] = self._long_form_store

@@ -4,7 +4,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.types import Message
-from anthropic import AsyncAnthropic
+from bot.services.llm import LLMClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,7 +49,7 @@ def _params_from_parsed(p: ParsedWatch) -> dict:
 async def handle_free_text(
     message: Message,
     session: AsyncSession,
-    claude: AsyncAnthropic,
+    llm: LLMClient,
     settings: Settings,
     chat_store: ChatStore,
 ) -> None:
@@ -58,7 +58,7 @@ async def handle_free_text(
 
     try:
         turn = await chat_turn(
-            claude, settings, chat_store, message.from_user.id, message.text
+            llm, settings, chat_store, message.from_user.id, message.text
         )
     except Exception:
         logger.exception("chat_turn failed")

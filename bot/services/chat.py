@@ -7,10 +7,10 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from anthropic import AsyncAnthropic
 from pydantic import ValidationError
 
 from bot.config import Settings
+from bot.services.llm import LLMClient
 from bot.services.parser import ParsedWatch, _bump_past_dates
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ def _system_prompt() -> str:
 
 
 async def chat_turn(
-    client: AsyncAnthropic,
+    llm: LLMClient,
     settings: Settings,
     store: ChatStore,
     user_id: int,
@@ -108,13 +108,15 @@ async def chat_turn(
     session.messages = session.messages[-MAX_TURNS * 2 :]
     session.touch()
 
-    response = await client.with_options(timeout=30.0, max_retries=1).messages.create(
-        model=settings.haiku_model,
-        max_tokens=600,
+    result = await llm.complete(
+        speed="fast",
         system=_system_prompt(),
         messages=session.messages,
+        max_tokens=600,
+        timeout=30.0,
+        max_retries=1,
     )
-    text = next((b.text for b in response.content if b.type == "text"), "").strip()
+    text = result.text.strip()
 
     if "<CANCEL" in text:
         store.clear(user_id)

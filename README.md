@@ -17,6 +17,7 @@ Roda numa VM micro grátis (Google Cloud `e2-micro`, Oracle AMD `E2.1.Micro` ou 
 - **Follow-up** — `/seguir <pergunta>` faz perguntas adicionais sobre a última `/roteiro` ou `/compras` aproveitando o contexto da resposta anterior (até 6 turnos, expira em 30 min).
 - **Acesso protegido por senha** — qualquer usuário precisa enviar a senha configurada antes de qualquer comando; uma vez autorizado, fica liberado pra sempre.
 - **Isolamento por usuário** — cada um vê e gerencia só seus próprios monitoramentos; alertas vão pro chat do dono.
+- **Multi-provedor de IA** — escolha entre Anthropic Claude, OpenAI ou Google Gemini via `.env` (`AI_PROVIDER`). Default é Anthropic; a troca afeta todas as chamadas (parser, chat, alertas, roteiros, compras, seguir, ping). Sem fallback automático: se o provider falhar, o erro é específico.
 - **Backup diário** — dump SQLite gzipado, retenção de 14 dias.
 - **Robustez** — timeouts curtos nas chamadas da IA, fallback de mensagem em texto puro se o HTML quebrar, validação prévia que pergunta o que falta antes de chamar a SerpAPI, post-processing de datas (datas no passado são automaticamente bumpadas pra próximo ano).
 
@@ -24,7 +25,7 @@ Roda numa VM micro grátis (Google Cloud `e2-micro`, Oracle AMD `E2.1.Micro` ou 
 
 - **Python 3.12** + **aiogram 3** (Telegram long polling)
 - **SQLAlchemy 2** async + **aiosqlite** (SQLite com volume Docker)
-- **Anthropic SDK** — Claude Haiku 4.5 (parser, alertas, conversa) + Sonnet 4.6 (roteiros, guias longos, follow-up)
+- **Multi-LLM** — Anthropic Claude, OpenAI, Google Gemini. Dois tiers por provider: `fast` (parser/chat/alertas/ping) e `slow` (roteiros/compras/seguir). Defaults: Haiku 4.5 + Sonnet 4.6 / GPT-5-mini + GPT-5 / Gemini 2.5 Flash + 2.5 Pro.
 - **SerpAPI** — Google Flights e Google Hotels (incluindo `price_insights`)
 - **httpx**, **pydantic-settings**, **python-json-logger**
 - Tudo num único container, sem dependências externas além das APIs acima
@@ -35,7 +36,7 @@ Roda numa VM micro grátis (Google Cloud `e2-micro`, Oracle AMD `E2.1.Micro` ou 
 |---|---|
 | `/start` | Mensagem de boas-vindas |
 | `/help` | Lista os comandos disponíveis |
-| `/ping` | Testa a conexão com a Claude API |
+| `/ping` | Testa a conexão com a IA (mostra provider e modelo ativos) |
 | `/roteiro <destino e detalhes>` | Gera roteiro dia a dia (até ~30 dias) |
 | `/compras <o que> em <cidade>` | Guia de onde comprar no destino |
 | `/seguir <pergunta>` | Follow-up sobre o último `/roteiro` ou `/compras` |
@@ -91,9 +92,15 @@ O esquema do banco é criado automaticamente no primeiro boot. Micro-migrações
 | Variável | Descrição | Default |
 |---|---|---|
 | `BOT_TOKEN` | Token do BotFather | — |
-| `ANTHROPIC_API_KEY` | Claude API | — |
 | `SERPAPI_KEY` | SerpAPI | — |
 | `ACCESS_PASSWORD` | Senha pra liberar acesso a novos usuários | — |
+| `AI_PROVIDER` | `anthropic`, `openai` ou `gemini` | `anthropic` |
+| `ANTHROPIC_API_KEY` | Chave da Anthropic (obrigatória só se `AI_PROVIDER=anthropic`) | — |
+| `OPENAI_API_KEY` | Chave da OpenAI (obrigatória só se `AI_PROVIDER=openai`) | — |
+| `GEMINI_API_KEY` | Chave do Gemini (obrigatória só se `AI_PROVIDER=gemini`) | — |
+| `HAIKU_MODEL` / `SONNET_MODEL` | Modelos Anthropic fast/slow | `claude-haiku-4-5` / `claude-sonnet-4-6` |
+| `OPENAI_FAST_MODEL` / `OPENAI_SLOW_MODEL` | Modelos OpenAI fast/slow | `gpt-5-mini` / `gpt-5` |
+| `GEMINI_FAST_MODEL` / `GEMINI_SLOW_MODEL` | Modelos Gemini fast/slow | `gemini-2.5-flash` / `gemini-2.5-pro` |
 | `DATABASE_PATH` | Caminho do SQLite no container | `/data/travels.db` |
 | `LOG_LEVEL` | `DEBUG`/`INFO`/`WARNING` | `INFO` |
 | `LOG_JSON` | Logs em JSON estruturado | `true` |
@@ -162,7 +169,12 @@ bot/
 │   ├── auth.py              # gate de senha
 │   └── db.py                # injeta session + deps em todos os handlers
 └── services/
-    ├── claude_client.py     # construtor do AsyncAnthropic
+    ├── llm/                 # abstração multi-provider
+    │   ├── base.py          # LLMClient Protocol + exceções unificadas
+    │   ├── factory.py       # make_llm(settings) escolhe a impl
+    │   ├── anthropic_impl.py
+    │   ├── openai_impl.py
+    │   └── gemini_impl.py
     ├── serpapi_client.py    # wrapper httpx + extratores + flex search + price insights + formatadores
     ├── parser.py            # parser one-shot + bump de datas no passado
     ├── chat.py              # conversa stateful (criação de watch)

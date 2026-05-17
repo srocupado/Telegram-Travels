@@ -3,24 +3,26 @@ import logging
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
-from anthropic import AsyncAnthropic
 
 from bot.config import Settings
+from bot.services.llm import LLMClient
 
 logger = logging.getLogger(__name__)
 router = Router(name="ping")
 
 
 @router.message(Command("ping"))
-async def cmd_ping(message: Message, claude: AsyncAnthropic, settings: Settings) -> None:
+async def cmd_ping(message: Message, llm: LLMClient, settings: Settings) -> None:
     try:
-        response = await claude.messages.create(
-            model=settings.haiku_model,
-            max_tokens=64,
+        result = await llm.complete(
+            speed="fast",
+            system="",
             messages=[{"role": "user", "content": "Responda apenas: pong"}],
+            max_tokens=64,
         )
-        text = next((b.text for b in response.content if b.type == "text"), "")
-        await message.answer(f"✅ Claude {settings.haiku_model}: {text.strip()}")
+        await message.answer(
+            f"✅ {llm.provider} / {llm.fast_model}: {result.text.strip()}"
+        )
     except Exception as e:
         logger.exception("ping failed")
-        await message.answer(f"❌ Claude API erro: {type(e).__name__}: {e}")
+        await message.answer(f"❌ {llm.provider} erro: {type(e).__name__}: {e}")

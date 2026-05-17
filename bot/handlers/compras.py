@@ -6,7 +6,7 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.filters.command import CommandObject
 from aiogram.types import Message
-from anthropic import AsyncAnthropic
+from bot.services.llm import LLMClient
 
 from bot.config import Settings
 from bot.services.long_form import stream_long_form_to_telegram
@@ -39,7 +39,7 @@ Regras:
 async def cmd_compras(
     message: Message,
     command: CommandObject,
-    claude: AsyncAnthropic,
+    llm: LLMClient,
     settings: Settings,
     long_form_store: LongFormStore,
 ) -> None:
@@ -56,7 +56,7 @@ async def cmd_compras(
     placeholder = await message.answer("🛍️ Pesquisando lugares… acompanhe abaixo:")
 
     result = await stream_long_form_to_telegram(
-        claude, settings, COMPRAS_SYSTEM, command.args, placeholder, max_tokens=8000
+        llm, settings, COMPRAS_SYSTEM, command.args, placeholder, max_tokens=8000
     )
 
     if result.truncated:

@@ -17,7 +17,7 @@ from bot.logging_setup import setup_logging
 from bot.middlewares.auth import AuthMiddleware
 from bot.middlewares.db import DepsMiddleware
 from bot.services.chat import ChatStore
-from bot.services.claude_client import make_claude
+from bot.services.llm import make_llm
 from bot.services.long_form_chat import LongFormStore
 from bot.services.scheduler import run_scheduler
 from bot.services.serpapi_client import SerpAPIClient
@@ -56,7 +56,7 @@ async def main() -> None:
     await _migrate(engine)
 
     sessionmaker = make_sessionmaker(engine)
-    claude = make_claude(settings)
+    llm = make_llm(settings)
     serpapi = SerpAPIClient(settings)
     chat_store = ChatStore()
     long_form_store = LongFormStore()
@@ -71,13 +71,13 @@ async def main() -> None:
     )
     dp.update.middleware(
         DepsMiddleware(
-            sessionmaker, settings, claude, serpapi, chat_store, long_form_store
+            sessionmaker, settings, llm, serpapi, chat_store, long_form_store
         )
     )
     dp.include_router(handlers.router)
 
     scheduler_task = asyncio.create_task(
-        run_scheduler(sessionmaker, serpapi, claude, bot, settings)
+        run_scheduler(sessionmaker, serpapi, llm, bot, settings)
     )
 
     logger.info("Start polling")
@@ -89,6 +89,7 @@ async def main() -> None:
             await scheduler_task
         except asyncio.CancelledError:
             pass
+        await llm.aclose()
         await serpapi.close()
         await bot.session.close()
         await engine.dispose()

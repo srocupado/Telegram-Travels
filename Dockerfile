@@ -23,6 +23,8 @@ RUN pip install \
         "pydantic-settings~=2.6" \
         "python-json-logger~=2.0" \
         "anthropic~=0.40" \
+        "openai~=1.50" \
+        "google-genai~=0.3" \
         "httpx~=0.27"
 
 COPY --chown=bot:bot . .

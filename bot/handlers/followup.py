@@ -6,7 +6,7 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.filters.command import CommandObject
 from aiogram.types import Message
-from anthropic import AsyncAnthropic
+from bot.services.llm import LLMClient
 
 from bot.config import Settings
 from bot.services.long_form_chat import LongFormStore, stream_followup_to_telegram
@@ -19,7 +19,7 @@ router = Router(name="followup")
 async def cmd_seguir(
     message: Message,
     command: CommandObject,
-    claude: AsyncAnthropic,
+    llm: LLMClient,
     settings: Settings,
     long_form_store: LongFormStore,
 ) -> None:
@@ -44,6 +44,6 @@ async def cmd_seguir(
 
     placeholder = await message.answer("💬 Pensando…")
     await stream_followup_to_telegram(
-        claude, settings, ctx, command.args, placeholder,
+        llm, settings, ctx, command.args, placeholder,
         long_form_store, message.from_user.id,
     )

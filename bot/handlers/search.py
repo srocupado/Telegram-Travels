@@ -2,15 +2,21 @@ from __future__ import annotations
 
 import logging
 
-import anthropic
 from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.filters.command import CommandObject
 from aiogram.types import Message
-from anthropic import AsyncAnthropic
 
 from bot.config import Settings
+from bot.services.llm import (
+    LLMBadRequest,
+    LLMClient,
+    LLMConnection,
+    LLMRateLimit,
+    LLMServerError,
+    LLMTimeout,
+)
 from bot.services.parser import ParsedWatch, parse_watch
 from bot.services.serpapi_client import (
     SerpAPIClient,
@@ -52,7 +58,7 @@ def _missing_fields(p: ParsedWatch) -> str | None:
 async def cmd_search(
     message: Message,
     command: CommandObject,
-    claude: AsyncAnthropic,
+    llm: LLMClient,
     serpapi: SerpAPIClient,
     settings: Settings,
 ) -> None:
@@ -66,23 +72,21 @@ async def cmd_search(
 
     try:
         try:
-            parsed = await parse_watch(claude, settings, command.args)
-        except anthropic.APITimeoutError:
+            parsed = await parse_watch(llm, settings, command.args)
+        except LLMTimeout:
             await message.answer("⏱️ A IA demorou demais. Tenta de novo daqui a pouco.")
             return
-        except anthropic.RateLimitError:
+        except LLMRateLimit:
             await message.answer("🚦 Limite de uso da IA. Espera alguns minutos.")
             return
-        except anthropic.APIConnectionError:
+        except LLMConnection:
             await message.answer("🌐 Sem conexão com a IA. Tenta de novo.")
             return
-        except anthropic.APIStatusError as e:
-            msg = (
-                "🛠️ A IA está instável agora. Tenta de novo daqui a pouco."
-                if e.status_code >= 500
-                else "Não consegui interpretar seu pedido. Tente reformular."
-            )
-            await message.answer(msg)
+        except LLMServerError:
+            await message.answer("🛠️ A IA está instável agora. Tenta de novo daqui a pouco.")
+            return
+        except LLMBadRequest:
+            await message.answer("Não consegui interpretar seu pedido. Tente reformular.")
             return
         except Exception:
             logger.exception("parse failed")

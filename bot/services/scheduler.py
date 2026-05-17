@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot
-from anthropic import AsyncAnthropic
+from bot.services.llm import LLMClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 async def check_watch(
     session: AsyncSession,
     serpapi: SerpAPIClient,
-    claude: AsyncAnthropic,
+    llm: LLMClient,
     bot: Bot,
     settings: Settings,
     watch: Watch,
@@ -155,7 +155,7 @@ async def check_watch(
     watch.high_streak = (watch.high_streak or 0) + 1 if level == "high" else 0
 
     if fire:
-        headline = await compose_alert_message(claude, settings, watch, price, reason)
+        headline = await compose_alert_message(llm, settings, watch, price, reason)
         details = (
             format_flight(price, payload, chosen_dep, chosen_ret, insights)
             if watch.kind == "flight"
@@ -200,7 +200,7 @@ async def check_watch(
 async def tick(
     sessionmaker: async_sessionmaker[AsyncSession],
     serpapi: SerpAPIClient,
-    claude: AsyncAnthropic,
+    llm: LLMClient,
     bot: Bot,
     settings: Settings,
 ) -> None:
@@ -220,20 +220,20 @@ async def tick(
             fresh = await session.get(Watch, w.id)
             if fresh is None or fresh.status != "active":
                 continue
-            await check_watch(session, serpapi, claude, bot, settings, fresh)
+            await check_watch(session, serpapi, llm, bot, settings, fresh)
 
 
 async def run_scheduler(
     sessionmaker: async_sessionmaker[AsyncSession],
     serpapi: SerpAPIClient,
-    claude: AsyncAnthropic,
+    llm: LLMClient,
     bot: Bot,
     settings: Settings,
 ) -> None:
     logger.info("scheduler started; tick=%ds", settings.scheduler_tick_seconds)
     while True:
         try:
-            await tick(sessionmaker, serpapi, claude, bot, settings)
+            await tick(sessionmaker, serpapi, llm, bot, settings)
         except Exception:
             logger.exception("scheduler tick crashed")
         await asyncio.sleep(settings.scheduler_tick_seconds)

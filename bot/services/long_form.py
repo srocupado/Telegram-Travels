@@ -7,12 +7,19 @@ import time
 from dataclasses import dataclass
 from urllib.parse import quote_plus
 
-import anthropic
 from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.types import Message
-from anthropic import AsyncAnthropic
 
 from bot.config import Settings
+from bot.services.llm import (
+    LLMAuth,
+    LLMBadRequest,
+    LLMClient,
+    LLMConnection,
+    LLMRateLimit,
+    LLMServerError,
+    LLMTimeout,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +73,7 @@ async def _safe_edit(msg: Message, text: str) -> None:
 
 
 async def stream_long_form_to_telegram(
-    client: AsyncAnthropic,
+    llm: LLMClient,
     settings: Settings,
     system: str,
     user_text: str,
@@ -74,11 +81,11 @@ async def stream_long_form_to_telegram(
     max_tokens: int = 16000,
 ) -> StreamResult:
     try:
-        async with client.messages.stream(
-            model=settings.sonnet_model,
-            max_tokens=max_tokens,
+        async with llm.stream(
+            speed="slow",
             system=system,
             messages=[{"role": "user", "content": user_text}],
+            max_tokens=max_tokens,
         ) as stream:
             messages: list[Message] = [placeholder]
             current = ""
@@ -105,7 +112,7 @@ async def stream_long_form_to_telegram(
                     await _safe_edit(messages[-1], current)
                     last_edit = now
 
-            final = await stream.get_final_message()
+            final = await stream.get_final()
             if current.strip():
                 await _safe_edit(messages[-1], current)
                 chunks.append(current.strip())
@@ -123,29 +130,31 @@ async def stream_long_form_to_telegram(
                 text="\n\n".join(chunks).strip(),
             )
 
-    except anthropic.APITimeoutError:
+    except LLMTimeout:
         await _safe_edit(placeholder, "⏱️ A IA demorou demais pra responder. Tenta de novo.")
         return StreamResult(error="timeout", truncated=False)
-    except anthropic.RateLimitError:
+    except LLMRateLimit:
         await _safe_edit(
             placeholder,
             "🚦 Estamos no limite de uso da IA agora. Espera uns minutos e tenta de novo.",
         )
         return StreamResult(error="rate_limit", truncated=False)
-    except anthropic.AuthenticationError:
-        logger.exception("anthropic auth error")
+    except LLMAuth:
+        logger.exception("LLM auth error")
         await _safe_edit(placeholder, "🔑 Problema de autenticação com a IA. Avise o admin.")
         return StreamResult(error="auth", truncated=False)
-    except anthropic.APIStatusError as e:
-        logger.exception("anthropic api status error")
-        msg = (
-            "🛠️ Instabilidade na IA. Tenta de novo daqui a pouco."
-            if e.status_code >= 500
-            else f"❌ Erro da IA ({e.status_code}). Tenta reformular."
+    except LLMServerError as e:
+        logger.exception("LLM server error")
+        await _safe_edit(
+            placeholder,
+            f"🛠️ Instabilidade na IA ({e.status_code}). Tenta de novo daqui a pouco.",
         )
-        await _safe_edit(placeholder, msg)
-        return StreamResult(error="api_status", truncated=False)
-    except anthropic.APIConnectionError:
+        return StreamResult(error="server", truncated=False)
+    except LLMBadRequest as e:
+        logger.exception("LLM bad request")
+        await _safe_edit(placeholder, f"❌ Erro da IA ({e.status_code}). Tenta reformular.")
+        return StreamResult(error="bad_request", truncated=False)
+    except LLMConnection:
         await _safe_edit(placeholder, "🌐 Falha de conexão com a IA. Tenta de novo.")
         return StreamResult(error="connection", truncated=False)
     except Exception:
