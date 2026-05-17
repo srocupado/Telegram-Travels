@@ -39,8 +39,8 @@ HELP = (
     "/congresso_now - consulta a agenda de MPs da semana agora\n"
     "/trafego_on - resumo diário de trânsito casa→trabalho (seg-sex 07:20 BRT)\n"
     "/trafego_off - cancela o resumo diário\n"
-    "/trafego_now casa - tempo agora pro trajeto trabalho→casa\n"
-    "/trafego_now trabalho - tempo agora pro trajeto casa→trabalho\n"
+    "/trafego_now casa - tempo agora pro trajeto trabalho→casa (com alternativa)\n"
+    "/trafego_now trabalho - tempo agora pro trajeto casa→trabalho (com alternativa)\n"
 )
 
 
