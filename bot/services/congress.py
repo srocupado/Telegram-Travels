@@ -25,7 +25,7 @@ USER_AGENT = (
 
 _WEEKDAY_PT = {0: "seg", 1: "ter", 2: "qua", 3: "qui", 4: "sex", 5: "sáb", 6: "dom"}
 
-_MP_REGEX = re.compile(r"\bmpv?\b")
+_MP_REGEX = re.compile(r"\b(?:mpv?|cmmpv)\b")
 _TIME_REGEX = re.compile(r"\b(\d{1,2})\s*h\s*(\d{2})\b")
 
 
@@ -77,17 +77,49 @@ def _parse_day(html_text: str, day: date, base_url: str) -> list[MPItem]:
     items: list[MPItem] = []
     seen: set[str] = set()
     for row in rows:
+        # Filtro de casa: só eventos do Congresso Nacional (sessões conjuntas
+        # e comissões mistas, incluindo CMMPV). Câmara (CD) e Senado (SF)
+        # isolados ficam de fora.
+        if row.get("data-casa") != "CN":
+            continue
         full_text = " ".join(row.get_text(" ", strip=True).split())
         if not full_text or not _is_mp(full_text):
             continue
+        orgao_block = row.find("div", class_="cn-agenda-casas-orgao")
+        orgao = (
+            " ".join(orgao_block.get_text(" ", strip=True).split())
+            if orgao_block
+            else None
+        )
+        # Título/link da sessão fica num <a> da célula principal, não no
+        # <a> do órgão (link da comissão) nem no clone visible-phone.
+        link_tag = None
+        for a in row.find_all("a", href=True):
+            ancestors_classes = {
+                cls
+                for parent in a.parents
+                for cls in (parent.get("class") or [])
+            }
+            if "cn-agenda-casas-orgao" in ancestors_classes:
+                continue
+            if "visible-phone" in ancestors_classes:
+                continue
+            link_tag = a
+            break
+        titulo = (
+            " ".join(link_tag.get_text(" ", strip=True).split()) or None
+            if link_tag is not None
+            else None
+        )
         desc_block = row.find("blockquote", class_="cn-agenda-casas-descricao")
-        descricao = (
+        desc_bq = (
             " ".join(desc_block.get_text(" ", strip=True).split())
             if desc_block
-            else full_text
+            else None
         )
+        parts = [p for p in (orgao, titulo, desc_bq) if p]
+        descricao = " — ".join(parts) if parts else full_text
         hora = _extract_time(full_text)
-        link_tag = row.find("a", href=True)
         link = urljoin(base_url, link_tag["href"]) if link_tag else None
         sig = descricao[:200]
         if sig in seen:
