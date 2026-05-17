@@ -19,6 +19,10 @@ class User(Base):
         Boolean, default=False, server_default="0"
     )
     last_congress_digest_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    traffic_subscribed: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0"
+    )
+    last_traffic_digest_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

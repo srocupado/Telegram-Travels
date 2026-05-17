@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     alert_cooldown_hours: int = 12
     congress_digest_enabled: bool = True
 
+    google_maps_api_key: SecretStr | None = None
+    home_coords: str | None = None
+    work_coords: str | None = None
+    route_google_maps_url: str | None = None
+    traffic_digest_enabled: bool = True
+    traffic_hour: int = 7
+    traffic_minute: int = 20
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -57,6 +57,18 @@ async def _migrate(engine: AsyncEngine) -> None:
             )
             logger.info("migrated users.last_congress_digest_at")
 
+        if not await _column_exists(conn, "users", "traffic_subscribed"):
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN traffic_subscribed BOOLEAN NOT NULL DEFAULT 0"
+            )
+            logger.info("migrated users.traffic_subscribed")
+
+        if not await _column_exists(conn, "users", "last_traffic_digest_at"):
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN last_traffic_digest_at DATETIME"
+            )
+            logger.info("migrated users.last_traffic_digest_at")
+
 
 async def main() -> None:
     settings = Settings()

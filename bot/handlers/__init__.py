@@ -9,6 +9,7 @@ from bot.handlers import (
     roteiro,
     search,
     start,
+    traffic,
     watch,
 )
 
@@ -21,4 +22,5 @@ router.include_router(followup.router)
 router.include_router(search.router)
 router.include_router(manage.router)
 router.include_router(congress.router)
+router.include_router(traffic.router)
 router.include_router(watch.router)
