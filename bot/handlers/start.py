@@ -34,6 +34,13 @@ HELP = (
     "/resume &lt;id&gt; - retoma\n"
     "/delete &lt;id&gt; - apaga\n"
     "/snooze &lt;id&gt; &lt;horas&gt; - silencia alertas por N horas\n"
+    "/congresso_on - resumo semanal de MPs do Congresso (segunda 07:00 BRT)\n"
+    "/congresso_off - cancela o resumo semanal\n"
+    "/congresso_now - consulta a agenda de MPs da semana agora\n"
+    "/trafego_on - resumo diário de trânsito casa→trabalho (seg-sex 07:20 BRT)\n"
+    "/trafego_off - cancela o resumo diário\n"
+    "/trafego_now casa - tempo agora pro trajeto trabalho→casa\n"
+    "/trafego_now trabalho - tempo agora pro trajeto casa→trabalho\n"
 )
 
 
