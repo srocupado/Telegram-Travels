@@ -25,7 +25,8 @@ RUN pip install \
         "anthropic~=0.40" \
         "openai~=1.50" \
         "google-genai~=0.3" \
-        "httpx~=0.27"
+        "httpx~=0.27" \
+        "beautifulsoup4~=4.12"
 
 COPY --chown=bot:bot . .
 
