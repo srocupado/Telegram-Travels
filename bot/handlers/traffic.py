@@ -117,9 +117,11 @@ async def cmd_trafego_at(
         )
         return
     user.traffic_hour, user.traffic_minute = parsed
+    user.last_traffic_digest_at = None
     await session.commit()
     await message.answer(
-        f"⏰ Digest de trânsito agendado para {parsed[0]:02d}:{parsed[1]:02d} BRT."
+        f"⏰ Digest de trânsito agendado para {parsed[0]:02d}:{parsed[1]:02d} BRT. "
+        f"Marca de envio de hoje zerada."
     )
 
 

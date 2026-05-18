@@ -88,8 +88,12 @@ async def cmd_congress_at(
         )
         return
     user.congress_hour = h
+    user.last_congress_digest_at = None
     await session.commit()
-    await message.answer(f"⏰ Digest de MPs agendado para {h:02d}:00 BRT (segundas).")
+    await message.answer(
+        f"⏰ Digest de MPs agendado para {h:02d}:00 BRT (segundas). "
+        f"Marca de envio da semana zerada."
+    )
 
 
 @router.message(Command("congresso_reset"))
