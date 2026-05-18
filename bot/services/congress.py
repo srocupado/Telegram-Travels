@@ -27,6 +27,7 @@ _WEEKDAY_PT = {0: "seg", 1: "ter", 2: "qua", 3: "qui", 4: "sex", 5: "sáb", 6: "
 
 _MP_REGEX = re.compile(r"\b(?:mpv?|cmmpv)\b")
 _TIME_REGEX = re.compile(r"\b(\d{1,2})\s*h\s*(\d{2})\b")
+_CANCELED_REGEX = re.compile(r"\bcancelad[oa]s?\b")
 
 
 class CongressScrapeError(Exception):
@@ -84,6 +85,9 @@ def _parse_day(html_text: str, day: date, base_url: str) -> list[MPItem]:
             continue
         full_text = " ".join(row.get_text(" ", strip=True).split())
         if not full_text or not _is_mp(full_text):
+            continue
+        if _CANCELED_REGEX.search(_normalize(full_text)):
+            logger.info("congress: pulando evento cancelado em %s", day)
             continue
         orgao_block = row.find("div", class_="cn-agenda-casas-orgao")
         orgao = (
