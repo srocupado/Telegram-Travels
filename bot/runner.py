@@ -69,6 +69,24 @@ async def _migrate(engine: AsyncEngine) -> None:
             )
             logger.info("migrated users.last_traffic_digest_at")
 
+        if not await _column_exists(conn, "users", "congress_hour"):
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN congress_hour INTEGER"
+            )
+            logger.info("migrated users.congress_hour")
+
+        if not await _column_exists(conn, "users", "traffic_hour"):
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN traffic_hour INTEGER"
+            )
+            logger.info("migrated users.traffic_hour")
+
+        if not await _column_exists(conn, "users", "traffic_minute"):
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN traffic_minute INTEGER"
+            )
+            logger.info("migrated users.traffic_minute")
+
 
 async def main() -> None:
     settings = Settings()

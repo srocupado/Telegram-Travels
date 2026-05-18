@@ -244,7 +244,7 @@ async def run_congress_digest(
     if not settings.congress_digest_enabled:
         return
     now_brt = datetime.now(BRT)
-    if now_brt.weekday() != 0 or now_brt.hour < CONGRESS_HOUR:
+    if now_brt.weekday() != 0:
         return
 
     monday_brt = datetime.combine(now_brt.date(), time(0, 0), tzinfo=BRT)
@@ -256,7 +256,12 @@ async def run_congress_digest(
             (User.last_congress_digest_at.is_(None))
             | (User.last_congress_digest_at < monday_start_utc),
         )
-        users = list((await session.scalars(stmt)).all())
+        candidates = list((await session.scalars(stmt)).all())
+
+    users = [
+        u for u in candidates
+        if now_brt.hour >= (u.congress_hour if u.congress_hour is not None else CONGRESS_HOUR)
+    ]
 
     if not users:
         return
@@ -302,8 +307,6 @@ async def run_traffic_digest(
     now_brt = datetime.now(BRT)
     if now_brt.weekday() > 4:
         return
-    if (now_brt.hour, now_brt.minute) < (settings.traffic_hour, settings.traffic_minute):
-        return
 
     day_start_brt = datetime.combine(now_brt.date(), time(0, 0), tzinfo=BRT)
     day_start_utc = day_start_brt.astimezone(timezone.utc)
@@ -314,7 +317,14 @@ async def run_traffic_digest(
             (User.last_traffic_digest_at.is_(None))
             | (User.last_traffic_digest_at < day_start_utc),
         )
-        users = list((await session.scalars(stmt)).all())
+        candidates = list((await session.scalars(stmt)).all())
+
+    def _due(u: User) -> bool:
+        h = u.traffic_hour if u.traffic_hour is not None else settings.traffic_hour
+        m = u.traffic_minute if u.traffic_minute is not None else settings.traffic_minute
+        return (now_brt.hour, now_brt.minute) >= (h, m)
+
+    users = [u for u in candidates if _due(u)]
 
     if not users:
         return

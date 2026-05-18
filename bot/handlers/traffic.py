@@ -79,6 +79,63 @@ async def cmd_trafego_off(message: Message, session: AsyncSession) -> None:
     await message.answer("🚗 Resumo diário de trânsito cancelado.")
 
 
+def _parse_hhmm(s: str) -> tuple[int, int] | None:
+    parts = s.strip().split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        h, m = int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        return None
+    return h, m
+
+
+@router.message(Command("trafego_at"))
+async def cmd_trafego_at(
+    message: Message, command: CommandObject, session: AsyncSession, settings: Settings
+) -> None:
+    user = await _get_or_create_user(session, message)
+    if user is None:
+        return
+    arg = (command.args or "").strip()
+    if not arg:
+        user.traffic_hour = None
+        user.traffic_minute = None
+        await session.commit()
+        await message.answer(
+            f"⏰ Horário do digest de trânsito voltou pro default "
+            f"({settings.traffic_hour:02d}:{settings.traffic_minute:02d} BRT)."
+        )
+        return
+    parsed = _parse_hhmm(arg)
+    if parsed is None:
+        await message.answer(
+            "Uso: /trafego_at HH:MM (ex: /trafego_at 08:15). "
+            "Sem argumento volta pro default."
+        )
+        return
+    user.traffic_hour, user.traffic_minute = parsed
+    await session.commit()
+    await message.answer(
+        f"⏰ Digest de trânsito agendado para {parsed[0]:02d}:{parsed[1]:02d} BRT."
+    )
+
+
+@router.message(Command("trafego_reset"))
+async def cmd_trafego_reset(message: Message, session: AsyncSession) -> None:
+    user = await _get_or_create_user(session, message)
+    if user is None:
+        return
+    user.last_traffic_digest_at = None
+    await session.commit()
+    await message.answer(
+        "✅ Marca de envio de hoje zerada. No próximo tick o digest sai de novo "
+        "(se o horário agendado já passou)."
+    )
+
+
 @router.message(Command("trafego_now"))
 async def cmd_trafego_now(
     message: Message, command: CommandObject, settings: Settings

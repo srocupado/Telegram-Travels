@@ -5,7 +5,7 @@ from datetime import datetime
 
 import httpx
 from aiogram import Router
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,7 @@ from bot.services.congress import (
     fetch_week_mps,
     format_week_message,
 )
-from bot.services.scheduler import BRT
+from bot.services.scheduler import BRT, CONGRESS_HOUR
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +60,49 @@ async def cmd_congress_off(message: Message, session: AsyncSession) -> None:
     user.congress_subscribed = False
     await session.commit()
     await message.answer("🏛️ Resumo semanal de MPs cancelado.")
+
+
+@router.message(Command("congresso_at"))
+async def cmd_congress_at(
+    message: Message, command: CommandObject, session: AsyncSession
+) -> None:
+    user = await _get_or_create_user(session, message)
+    if user is None:
+        return
+    arg = (command.args or "").strip()
+    if not arg:
+        user.congress_hour = None
+        await session.commit()
+        await message.answer(
+            f"⏰ Hora do digest de MPs voltou pro default ({CONGRESS_HOUR:02d}:00 BRT)."
+        )
+        return
+    try:
+        h = int(arg)
+    except ValueError:
+        h = -1
+    if not (0 <= h <= 23):
+        await message.answer(
+            "Uso: /congresso_at H (hora 0-23, ex: /congresso_at 8). "
+            "Sem argumento volta pro default."
+        )
+        return
+    user.congress_hour = h
+    await session.commit()
+    await message.answer(f"⏰ Digest de MPs agendado para {h:02d}:00 BRT (segundas).")
+
+
+@router.message(Command("congresso_reset"))
+async def cmd_congress_reset(message: Message, session: AsyncSession) -> None:
+    user = await _get_or_create_user(session, message)
+    if user is None:
+        return
+    user.last_congress_digest_at = None
+    await session.commit()
+    await message.answer(
+        "✅ Marca de envio da semana zerada. No próximo tick o digest sai "
+        "(se for segunda e a hora agendada já passou)."
+    )
 
 
 @router.message(Command("congresso_now"))
