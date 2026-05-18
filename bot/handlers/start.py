@@ -36,7 +36,7 @@ HELP = (
     "/snooze &lt;id&gt; &lt;horas&gt; - silencia alertas por N horas\n"
     "/congresso_on - resumo semanal de MPs do Congresso (segunda 07:00 BRT)\n"
     "/congresso_off - cancela o resumo semanal\n"
-    "/congresso_at H - muda hora do digest de MPs (ex: /congresso_at 8); sem arg = default\n"
+    "/congresso_at HH:MM - muda horário do digest de MPs (ex: /congresso_at 08:15); sem arg = default\n"
     "/congresso_reset - re-dispara o digest da semana no próximo tick\n"
     "/congresso_now - consulta a agenda de MPs da semana agora\n"
     "/trafego_on - resumo diário de trânsito casa→trabalho (seg-sex 07:20 BRT)\n"

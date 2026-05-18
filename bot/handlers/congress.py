@@ -62,6 +62,19 @@ async def cmd_congress_off(message: Message, session: AsyncSession) -> None:
     await message.answer("🏛️ Resumo semanal de MPs cancelado.")
 
 
+def _parse_hhmm(s: str) -> tuple[int, int] | None:
+    parts = s.strip().split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        h, m = int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        return None
+    return h, m
+
+
 @router.message(Command("congresso_at"))
 async def cmd_congress_at(
     message: Message, command: CommandObject, session: AsyncSession
@@ -72,26 +85,24 @@ async def cmd_congress_at(
     arg = (command.args or "").strip()
     if not arg:
         user.congress_hour = None
+        user.congress_minute = None
         await session.commit()
         await message.answer(
-            f"⏰ Hora do digest de MPs voltou pro default ({CONGRESS_HOUR:02d}:00 BRT)."
+            f"⏰ Horário do digest de MPs voltou pro default ({CONGRESS_HOUR:02d}:00 BRT)."
         )
         return
-    try:
-        h = int(arg)
-    except ValueError:
-        h = -1
-    if not (0 <= h <= 23):
+    parsed = _parse_hhmm(arg)
+    if parsed is None:
         await message.answer(
-            "Uso: /congresso_at H (hora 0-23, ex: /congresso_at 8). "
+            "Uso: /congresso_at HH:MM (ex: /congresso_at 08:15). "
             "Sem argumento volta pro default."
         )
         return
-    user.congress_hour = h
+    user.congress_hour, user.congress_minute = parsed
     user.last_congress_digest_at = None
     await session.commit()
     await message.answer(
-        f"⏰ Digest de MPs agendado para {h:02d}:00 BRT (segundas). "
+        f"⏰ Digest de MPs agendado para {parsed[0]:02d}:{parsed[1]:02d} BRT (segundas). "
         f"Marca de envio da semana zerada."
     )
 

@@ -20,6 +20,7 @@ class User(Base):
     )
     last_congress_digest_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     congress_hour: Mapped[int | None] = mapped_column(Integer)
+    congress_minute: Mapped[int | None] = mapped_column(Integer)
     traffic_subscribed: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="0"
     )

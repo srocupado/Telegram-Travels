@@ -258,10 +258,12 @@ async def run_congress_digest(
         )
         candidates = list((await session.scalars(stmt)).all())
 
-    users = [
-        u for u in candidates
-        if now_brt.hour >= (u.congress_hour if u.congress_hour is not None else CONGRESS_HOUR)
-    ]
+    def _due(u: User) -> bool:
+        h = u.congress_hour if u.congress_hour is not None else CONGRESS_HOUR
+        m = u.congress_minute if u.congress_minute is not None else 0
+        return (now_brt.hour, now_brt.minute) >= (h, m)
+
+    users = [u for u in candidates if _due(u)]
 
     if not users:
         return
