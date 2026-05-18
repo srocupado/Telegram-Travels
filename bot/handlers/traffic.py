@@ -15,8 +15,8 @@ from bot.db.models import User
 from bot.services.traffic import (
     USER_AGENT,
     TrafficError,
-    fetch_traffic,
-    format_traffic_message,
+    fetch_traffic_with_alternative,
+    format_traffic_message_dual,
     parse_route_waypoints,
 )
 
@@ -117,7 +117,7 @@ async def cmd_trafego_now(
                 )
                 if reverse:
                     waypoints = list(reversed(waypoints))
-            info = await fetch_traffic(
+            pref, alt = await fetch_traffic_with_alternative(
                 client,
                 api_key,
                 origin,
@@ -130,7 +130,13 @@ async def cmd_trafego_now(
         await message.answer(_FETCH_ERROR)
         return
 
-    text = format_traffic_message(info, label)
+    if alt is not None:
+        logger.info(
+            "/trafego_now: 2 rotas (pref=%d min via %s, alt=%d min via %s)",
+            pref.duration_minutes, pref.summary or "—",
+            alt.duration_minutes, alt.summary or "—",
+        )
+    text = format_traffic_message_dual(pref, alt, label)
     try:
         await message.answer(text, disable_web_page_preview=True)
     except Exception:

@@ -76,45 +76,8 @@ def _format_waypoints(waypoints: list[str]) -> str:
     return "|".join(parts)
 
 
-async def fetch_traffic(
-    client: httpx.AsyncClient,
-    api_key: str,
-    origin: str,
-    destination: str,
-    waypoints: list[str],
-    maps_url: str = "",
-) -> TrafficInfo:
-    params = {
-        "origin": origin,
-        "destination": destination,
-        "departure_time": "now",
-        "traffic_model": "best_guess",
-        "mode": "driving",
-        "key": api_key,
-    }
-    if waypoints:
-        params["waypoints"] = _format_waypoints(waypoints)
-
-    try:
-        resp = await client.get(DIRECTIONS_ENDPOINT, params=params)
-        resp.raise_for_status()
-    except httpx.HTTPError as e:
-        raise TrafficError(f"directions request failed: {e}") from e
-
-    data = resp.json()
-    status = data.get("status")
-    if status != "OK":
-        msg = data.get("error_message") or status or "unknown error"
-        raise TrafficError(f"directions API status={status}: {msg}")
-
-    routes = data.get("routes") or []
-    if not routes:
-        raise TrafficError("directions API returned no routes")
-    route = routes[0]
+def _route_to_info(route: dict, origin: str, destination: str, maps_url: str) -> TrafficInfo:
     legs = route.get("legs") or []
-    if not legs:
-        raise TrafficError("directions API route has no legs")
-
     duration_traffic_s = 0
     duration_typical_s = 0
     distance_m = 0
@@ -142,6 +105,99 @@ async def fetch_traffic(
         summary=summary,
         maps_url=maps_url or fallback_url,
     )
+
+
+async def fetch_traffic(
+    client: httpx.AsyncClient,
+    api_key: str,
+    origin: str,
+    destination: str,
+    waypoints: list[str],
+    maps_url: str = "",
+    alternatives: bool = False,
+) -> list[TrafficInfo]:
+    """Retorna lista de rotas. Com alternatives=True, pode trazer 2-3."""
+    params: dict[str, str] = {
+        "origin": origin,
+        "destination": destination,
+        "departure_time": "now",
+        "traffic_model": "best_guess",
+        "mode": "driving",
+        "key": api_key,
+    }
+    if waypoints:
+        params["waypoints"] = _format_waypoints(waypoints)
+    if alternatives:
+        params["alternatives"] = "true"
+
+    try:
+        resp = await client.get(DIRECTIONS_ENDPOINT, params=params)
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        raise TrafficError(f"directions request failed: {e}") from e
+
+    data = resp.json()
+    status = data.get("status")
+    if status != "OK":
+        msg = data.get("error_message") or status or "unknown error"
+        raise TrafficError(f"directions API status={status}: {msg}")
+
+    routes = data.get("routes") or []
+    if not routes:
+        raise TrafficError("directions API returned no routes")
+
+    infos: list[TrafficInfo] = []
+    for r in routes:
+        if not (r.get("legs") or []):
+            continue
+        infos.append(_route_to_info(r, origin, destination, maps_url))
+    if not infos:
+        raise TrafficError("directions API returned only empty routes")
+    return infos
+
+
+async def fetch_traffic_with_alternative(
+    client: httpx.AsyncClient,
+    api_key: str,
+    origin: str,
+    destination: str,
+    preferred_waypoints: list[str],
+    maps_url: str = "",
+) -> tuple[TrafficInfo, TrafficInfo | None]:
+    """Retorna (preferida, alternativa distinta). Quando não há waypoints,
+    pede alternatives no único request e usa a primeira como 'preferida' —
+    economiza chamada."""
+    import asyncio as _asyncio
+
+    if not preferred_waypoints:
+        infos = await fetch_traffic(
+            client, api_key, origin, destination, [],
+            maps_url=maps_url, alternatives=True,
+        )
+        pref = infos[0]
+        alt = next(
+            (i for i in infos[1:] if i.summary and i.summary != pref.summary),
+            None,
+        )
+        return pref, alt
+
+    pref_task = fetch_traffic(
+        client, api_key, origin, destination, preferred_waypoints,
+        maps_url=maps_url, alternatives=False,
+    )
+    free_task = fetch_traffic(
+        client, api_key, origin, destination, [],
+        maps_url=maps_url, alternatives=True,
+    )
+    pref_list, free_list = await _asyncio.gather(
+        pref_task, free_task, return_exceptions=False
+    )
+    pref = pref_list[0]
+    alt = next(
+        (i for i in free_list if i.summary and i.summary != pref.summary),
+        None,
+    )
+    return pref, alt
 
 
 def _severity_emoji(duration: int, typical: int) -> str:
@@ -177,4 +233,39 @@ def format_traffic_message(info: TrafficInfo, when_label: str) -> str:
     if info.maps_url:
         lines.append("")
         lines.append(f'<a href="{html.escape(info.maps_url, quote=True)}">abrir no Google Maps</a>')
+    return "\n".join(lines)
+
+
+def _route_block(label: str, info: TrafficInfo, star: bool = False) -> list[str]:
+    emoji = _severity_emoji(info.duration_minutes, info.typical_minutes)
+    suffix = " ⭐" if star else ""
+    via = f" via {html.escape(info.summary)}" if info.summary else ""
+    return [
+        f"{label} <b>~{info.duration_minutes} min</b> (típico: ~{info.typical_minutes}){suffix}",
+        f"{emoji} {info.distance_km} km{via}",
+    ]
+
+
+def format_traffic_message_dual(
+    preferred: TrafficInfo,
+    alternative: TrafficInfo | None,
+    when_label: str,
+) -> str:
+    if alternative is None:
+        return format_traffic_message(preferred, when_label)
+
+    label = html.escape(when_label)
+    lines = [f"🚗 <b>Trânsito {label}</b>", ""]
+    alt_faster = alternative.duration_minutes < preferred.duration_minutes
+    lines += _route_block("🅰️ <i>sua rota:</i>", preferred, star=not alt_faster)
+    lines.append("")
+    lines += _route_block("🅱️ <i>alternativa:</i>", alternative, star=alt_faster)
+    if alt_faster:
+        delta = preferred.duration_minutes - alternative.duration_minutes
+        lines.append(f"\n💡 Alternativa pode poupar ~{delta} min")
+    if preferred.maps_url:
+        lines.append("")
+        lines.append(
+            f'<a href="{html.escape(preferred.maps_url, quote=True)}">abrir sua rota no Google Maps</a>'
+        )
     return "\n".join(lines)

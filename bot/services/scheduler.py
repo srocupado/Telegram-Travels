@@ -38,6 +38,11 @@ from bot.services.traffic import (
     format_traffic_message,
     parse_route_waypoints,
 )
+from bot.services.weather import (
+    WeatherError,
+    fetch_today_weather,
+    format_weather_line,
+)
 
 FLEX_FLIGHT_WEEKDAYS = (1, 3)
 HIGH_STREAK_BACKOFF_THRESHOLD = 2
@@ -315,6 +320,7 @@ async def run_traffic_digest(
         return
 
     api_key = settings.google_maps_api_key.get_secret_value()
+    weather_line: str | None = None
     try:
         async with httpx.AsyncClient(
             timeout=20.0,
@@ -326,7 +332,7 @@ async def run_traffic_digest(
                 waypoints = await parse_route_waypoints(
                     client, settings.route_google_maps_url
                 )
-            info = await fetch_traffic(
+            traffic_task = fetch_traffic(
                 client,
                 api_key,
                 settings.home_coords,
@@ -334,16 +340,41 @@ async def run_traffic_digest(
                 waypoints,
                 maps_url=settings.route_google_maps_url or "",
             )
+            weather_task = fetch_today_weather(client, settings.home_coords)
+            results = await asyncio.gather(
+                traffic_task, weather_task, return_exceptions=True
+            )
+            traffic_result, weather_result = results
+            if isinstance(traffic_result, BaseException):
+                raise traffic_result
+            infos = traffic_result
+            info = infos[0]
+            if isinstance(weather_result, WeatherError):
+                logger.warning("weather fetch failed: %s", weather_result)
+            elif isinstance(weather_result, BaseException):
+                logger.exception(
+                    "weather fetch crashed", exc_info=weather_result
+                )
+            else:
+                weather_line = format_weather_line(weather_result)
     except TrafficError:
         logger.exception("traffic digest fetch failed")
         return
 
     message = format_traffic_message(info, "casa → trabalho")
+    if weather_line:
+        link_marker = "\n\n<a href="
+        idx = message.rfind(link_marker)
+        if idx >= 0:
+            message = message[:idx] + f"\n\n{weather_line}" + message[idx:]
+        else:
+            message = f"{message}\n\n{weather_line}"
     logger.info(
-        "traffic digest: %d inscritos, %d min via %s",
+        "traffic digest: %d inscritos, %d min via %s%s",
         len(users),
         info.duration_minutes,
         info.summary or "rota direta",
+        " (com clima)" if weather_line else "",
     )
 
     for u in users:
