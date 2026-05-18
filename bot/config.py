@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     database_path: str = "/data/travels.db"
     log_level: str = "INFO"
     log_json: bool = True
-    scheduler_tick_seconds: int = 3600
+    scheduler_tick_seconds: int = 300
     watch_check_interval_hours: int = 24
     alert_cooldown_hours: int = 12
     congress_digest_enabled: bool = True
