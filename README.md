@@ -1,6 +1,6 @@
 # Telegram-Travels
 
-Bot do Telegram que funciona como agente pessoal de viagens. Monitora preços de passagens e hotéis, alerta quando cai, gera roteiros dia-a-dia, sugere onde fazer compras no destino, e responde em português natural usando IA.
+Bot do Telegram que funciona como agente pessoal de viagens. Monitora preços de passagens e hotéis, alerta quando cai, gera roteiros dia-a-dia, sugere onde fazer compras no destino, responde em português natural usando IA, e ainda manda digest diário de trânsito casa↔trabalho (com clima) e semanal das MPs em pauta no Congresso.
 
 Roda numa VM micro grátis (Google Cloud `e2-micro`, Oracle AMD `E2.1.Micro` ou similar) — 1 GB RAM já basta.
 
@@ -18,6 +18,8 @@ Roda numa VM micro grátis (Google Cloud `e2-micro`, Oracle AMD `E2.1.Micro` ou 
 - **Acesso protegido por senha** — qualquer usuário precisa enviar a senha configurada antes de qualquer comando; uma vez autorizado, fica liberado pra sempre.
 - **Isolamento por usuário** — cada um vê e gerencia só seus próprios monitoramentos; alertas vão pro chat do dono.
 - **Multi-provedor de IA** — escolha entre Anthropic Claude, OpenAI ou Google Gemini via `.env` (`AI_PROVIDER`). Default é Anthropic; a troca afeta todas as chamadas (parser, chat, alertas, roteiros, compras, seguir, ping). Sem fallback automático: se o provider falhar, o erro é específico.
+- **Digest matinal de trânsito** — `/trafego_on` inscreve no resumo diário (seg-sex) com tempo casa→trabalho via Google Maps, rota preferida + alternativa distinta, faixa de temperatura e condição do clima (Open-Meteo). Horário configurável por usuário (`/trafego_at HH:MM`).
+- **Digest semanal de Medidas Provisórias** — `/congresso_on` envia toda segunda a agenda de MPs no Congresso Nacional (sessões conjuntas e CMMPV), com horário, descrição e link. Filtra eventos cancelados automaticamente. Horário configurável (`/congresso_at HH:MM`).
 - **Backup diário** — dump SQLite gzipado, retenção de 14 dias.
 - **Robustez** — timeouts curtos nas chamadas da IA, fallback de mensagem em texto puro se o HTML quebrar, validação prévia que pergunta o que falta antes de chamar a SerpAPI, post-processing de datas (datas no passado são automaticamente bumpadas pra próximo ano).
 
@@ -27,6 +29,9 @@ Roda numa VM micro grátis (Google Cloud `e2-micro`, Oracle AMD `E2.1.Micro` ou 
 - **SQLAlchemy 2** async + **aiosqlite** (SQLite com volume Docker)
 - **Multi-LLM** — Anthropic Claude, OpenAI, Google Gemini. Dois tiers por provider: `fast` (parser/chat/alertas/ping) e `slow` (roteiros/compras/seguir). Defaults: Haiku 4.5 + Sonnet 4.6 / GPT-5-mini + GPT-5 / Gemini 2.5 Flash + 2.5 Pro.
 - **SerpAPI** — Google Flights e Google Hotels (incluindo `price_insights`)
+- **Google Maps Routes API** — trânsito em tempo real pra digest casa↔trabalho
+- **Open-Meteo** — previsão diária (sem API key) pra clima no digest
+- **Scraper do Congresso Nacional** (BeautifulSoup) — agenda semanal de MPs
 - **httpx**, **pydantic-settings**, **python-json-logger**
 - Tudo num único container, sem dependências externas além das APIs acima
 
@@ -46,6 +51,16 @@ Roda numa VM micro grátis (Google Cloud `e2-micro`, Oracle AMD `E2.1.Micro` ou 
 | `/resume <id>` | Retoma |
 | `/delete <id>` | Apaga |
 | `/snooze <id> <horas>` | Silencia alertas por N horas |
+| `/trafego_on` | Inscreve no digest diário de trânsito casa→trabalho (seg-sex) |
+| `/trafego_off` | Cancela o digest |
+| `/trafego_at HH:MM` | Define horário do digest (BRT). Sem argumento volta ao default |
+| `/trafego_reset` | Re-dispara o digest de hoje no próximo tick |
+| `/trafego_now casa\|trabalho` | Tempo agora pro trajeto, com rota alternativa |
+| `/congresso_on` | Inscreve no digest semanal de MPs (segunda) |
+| `/congresso_off` | Cancela o digest |
+| `/congresso_at HH:MM` | Define horário do digest. Sem argumento volta ao default |
+| `/congresso_reset` | Re-dispara o digest da semana no próximo tick |
+| `/congresso_now` | Consulta a agenda da semana agora |
 
 Texto livre (sem `/`) entra no modo conversa, que cria novos monitoramentos.
 
@@ -64,6 +79,8 @@ Texto livre (sem `/`) entra no modo conversa, que cria novos monitoramentos.
 | Hotel com janela flexível | A cada `WATCH_CHECK_INTERVAL_HOURS` | Testa até 14 combinações de check-in dentro da janela |
 | Passagem com janela flexível | **Terça e quinta** (UTC), 1x/dia | Capta atualizações de tarifas semanais; sample de 5 datas × destinos |
 | Qualquer watch com 2 checks "high" seguidos | A cada **7 dias** (back-off) | Reseta quando o preço deixar de ser "high" |
+| Digest de trânsito | Seg-sex, no horário configurado por usuário (default `TRAFFIC_HOUR:TRAFFIC_MINUTE`, fallback 07:20 BRT) | Atraso máximo de ~`SCHEDULER_TICK_SECONDS` (default 5 min) |
+| Digest de MPs | Segunda, no horário configurado por usuário (default 07:00 BRT) | Mesma janela de atraso |
 
 Alertas têm cooldown de `ALERT_COOLDOWN_HOURS` (default **12h**) por watch, prorrogado se cair mais de 5% durante o cooldown.
 
@@ -72,7 +89,8 @@ Alertas têm cooldown de `ALERT_COOLDOWN_HOURS` (default **12h**) por watch, pro
 1. **Conta no Telegram BotFather** — gere um token (`BOT_TOKEN`).
 2. **API key Anthropic** — [console.anthropic.com](https://console.anthropic.com) → Settings → API Keys → Create. Recomendado pré-pagar uns USD 5–10.
 3. **API key SerpAPI** — [serpapi.com](https://serpapi.com) → signup → Dashboard. Free tier dá 100 buscas/mês; *Developer* a USD 50/mês dá 5 000.
-4. **Docker e Docker Compose** instalados na VM.
+4. **(Opcional) API key Google Maps** — pra digest de trânsito. Habilite a *Routes API* no Google Cloud Console e gere uma chave (`GOOGLE_MAPS_API_KEY`).
+5. **Docker e Docker Compose** instalados na VM.
 
 ## Deploy
 
@@ -85,7 +103,7 @@ docker compose up -d --build
 docker compose logs -f bot
 ```
 
-O esquema do banco é criado automaticamente no primeiro boot. Micro-migrações idempotentes adicionam colunas novas (`users.is_authorized`, `watches.high_streak`) quando você atualiza versões; usuários já existentes são "grandfathered" como autorizados.
+O esquema do banco é criado automaticamente no primeiro boot. Micro-migrações idempotentes adicionam colunas novas conforme as versões evoluem (`users.is_authorized`, `watches.high_streak`, `users.congress_subscribed`, `users.last_congress_digest_at`, `users.congress_hour`, `users.congress_minute`, `users.traffic_subscribed`, `users.last_traffic_digest_at`, `users.traffic_hour`, `users.traffic_minute`); usuários já existentes são "grandfathered" como autorizados.
 
 ### Variáveis de ambiente (.env)
 
@@ -104,9 +122,15 @@ O esquema do banco é criado automaticamente no primeiro boot. Micro-migrações
 | `DATABASE_PATH` | Caminho do SQLite no container | `/data/travels.db` |
 | `LOG_LEVEL` | `DEBUG`/`INFO`/`WARNING` | `INFO` |
 | `LOG_JSON` | Logs em JSON estruturado | `true` |
-| `SCHEDULER_TICK_SECONDS` | Frequência do loop do scheduler | `3600` |
+| `SCHEDULER_TICK_SECONDS` | Frequência do loop do scheduler. Define o atraso máximo dos digests | `300` |
 | `WATCH_CHECK_INTERVAL_HOURS` | Idade mínima pra rechecar watch comum | `24` |
 | `ALERT_COOLDOWN_HOURS` | Cooldown entre alertas do mesmo watch | `12` |
+| `CONGRESS_DIGEST_ENABLED` | Liga/desliga o digest semanal de MPs | `true` |
+| `TRAFFIC_DIGEST_ENABLED` | Liga/desliga o digest diário de trânsito | `true` |
+| `TRAFFIC_HOUR` / `TRAFFIC_MINUTE` | Horário default do digest de trânsito (BRT). Sobrescrito por `/trafego_at` | `7` / `20` |
+| `HOME_COORDS` / `WORK_COORDS` | Coordenadas `lat,lng` (sem espaço) das pontas do trajeto | — |
+| `GOOGLE_MAPS_API_KEY` | Chave da Routes API. Sem ela, digest e `/trafego_now` ficam desativados | — |
+| `ROUTE_GOOGLE_MAPS_URL` | (Opcional) link do Google Maps com a rota preferida, pra forçar waypoints intermediários | — |
 
 ## Operação
 
@@ -164,6 +188,8 @@ bot/
 │   ├── followup.py          # /seguir
 │   ├── search.py            # /pesquisa (com detalhes completos + price level)
 │   ├── manage.py            # /list, /pause, /resume, /delete, /snooze
+│   ├── traffic.py           # /trafego_on/off/at/reset/now
+│   ├── congress.py          # /congresso_on/off/at/reset/now
 │   └── watch.py             # texto livre → conversa stateful
 ├── middlewares/
 │   ├── auth.py              # gate de senha
@@ -181,7 +207,10 @@ bot/
     ├── long_form.py         # streaming ao vivo de /roteiro e /compras
     ├── long_form_chat.py    # contexto de follow-up pra /seguir
     ├── alerts.py            # regra de disparo (com price_insights) + compositor de mensagem
-    └── scheduler.py         # tick com intervalo por watch, back-off adaptativo, agenda Tue/Thu pra flex flight
+    ├── traffic.py           # Google Maps Routes: rota preferida + alternativa distinta
+    ├── weather.py           # Open-Meteo: faixa de temperatura + condição
+    ├── congress.py          # scraper da agenda do Congresso Nacional + filtro de cancelados
+    └── scheduler.py         # tick (default 5min): watches + digest de trânsito + digest de MPs
 ```
 
 ### Modelo de dados
@@ -227,6 +256,7 @@ Operação típica de uso pessoal/família (5–20 usuários, dezenas de watches
 - **`/roteiro` usa Sonnet 4.6, não Haiku.** Roteiros precisam de raciocínio mais elaborado pra calibrar a duração, conectar dias, e produzir sugestões específicas. Custo extra justificado.
 - **Schema sem Alembic.** Enquanto a evolução for só por adição, `create_all` + migrações inline na boot bastam. Vira Alembic quando precisar mudar/remover colunas.
 - **Sem cache de SerpAPI.** Cada `/pesquisa` queima 1 busca. Considerado adicionar TTL de 6h, mas não foi necessário ainda.
+- **Horário dos digests por usuário, mas a busca é compartilhada.** O scraping do Congresso e o cálculo de trânsito rodam uma única vez por tick e o resultado é enviado pros usuários elegíveis. Pra um bot pessoal/familiar, sem implicações práticas.
 
 ## Limites conhecidos
 
